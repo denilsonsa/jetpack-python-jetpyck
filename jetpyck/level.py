@@ -64,9 +64,9 @@ class JetpackEnemyKind(IntEnum):
     SPIKES = 5
     # Flitzes around randomly
     FLITZER = 6
-    # Uses radar to hunt you down
-    HOMER = 7
     # Travels through bricks straight toward you
+    HOMER = 7
+    # Uses radar to hunt you down
     BATBOT = 8
 
     # TODO: Found in level 52 for some reason.
@@ -550,3 +550,9 @@ class JetpackLevelPack:
             )
 
         return obj
+
+    def pack(self) -> bytes:
+        # TODO: Implement me!
+        # Also, I should implement some kind of "is_valid" check on all classes.
+        # I should not prevent writing invalid levels, but I should be able to detect those cases.
+        ...
