@@ -28,12 +28,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import IntEnum
 from pathlib import Path
-from typing import BinaryIO
 
-from PIL.ImagePalette import ImagePalette
-from PIL import Image, ImageSequence
+# https://mypy.readthedocs.io/en/stable/more_types.html#function-overloading
+from typing import BinaryIO, Optional, overload
 
-from .utils import unpack_stream
+from .utils import unpack_int, unpack_ints, unpack_bytes
 
 
 class JetpackEnemyKind(IntEnum):
@@ -95,8 +94,8 @@ class JetpackEnemy:
     @classmethod
     def unpack(cls, stream: BinaryIO) -> JetpackEnemy:
         obj = cls()
-        obj.kind = JetpackEnemyKind(*unpack_stream("B", stream))
-        obj.x, obj.y = unpack_stream("BB", stream)
+        obj.kind = JetpackEnemyKind(unpack_int("B", stream))
+        obj.x, obj.y = unpack_ints("BB", stream)
         return obj
 
     def pack(self) -> bytes:
@@ -279,7 +278,13 @@ class JetpackLevelTilemap:
     height: int = 16
 
     @classmethod
-    def unpack(cls, stream: BinaryIO, *, width=None, height=None) -> JetpackTilemap:
+    def unpack(
+        cls,
+        stream: BinaryIO,
+        *,
+        width: Optional[int] = None,
+        height: Optional[int] = None
+    ) -> JetpackLevelTilemap:
         obj = cls()
 
         # Allow overriding the original hard-coded level dimensions
@@ -288,8 +293,7 @@ class JetpackLevelTilemap:
         if height is not None:
             obj.height = height
 
-        (data,) = unpack_stream("{}s".format(len(obj)), stream)
-        obj.data = bytearray(data)
+        obj.data = bytearray(unpack_bytes("{}s".format(len(obj)), stream))
         return obj
 
     def pack(self) -> bytes:
@@ -298,7 +302,15 @@ class JetpackLevelTilemap:
     def __len__(self) -> int:
         return self.width * self.height
 
-    def _subscript_to_index(self, subscript: int | slice | tuple[int]) -> int | slice:
+    @overload
+    def _subscript_to_index(self, subscript: int | tuple[int, int]) -> int: ...
+
+    @overload
+    def _subscript_to_index(self, subscript: slice) -> slice: ...
+
+    def _subscript_to_index(
+        self, subscript: int | slice | tuple[int, int]
+    ) -> int | slice:
         """Supports multiple syntaxes:
         tilemap[123]   -> int in range 0..len(tilemap)
         tilemap[4, 6]  -> separate coordinates for x and y
@@ -323,17 +335,37 @@ class JetpackLevelTilemap:
         else:
             raise TypeError("Expected int or tuple, got {!r}".format(subscript))
 
-    def __getitem__(self, subscript: int | slice | tuple[int]) -> int | bytearray:
+    @overload
+    def __getitem__(self, subscript: int | tuple[int, int]) -> int: ...
+
+    @overload
+    def __getitem__(self, subscript: slice) -> bytearray: ...
+
+    def __getitem__(self, subscript: int | slice | tuple[int, int]) -> int | bytearray:
         index_or_slice = self._subscript_to_index(subscript)
         return self.data[index_or_slice]
 
-    def __setitem__(
-        self, subscript: int | slice | tuple[int], value: int | bytes | bytearray
-    ):
-        index_or_slice = self._subscript_to_index(subscript)
-        self.data[index_or_slice] = value
+    @overload
+    def __setitem__(self, subscript: int | tuple[int, int], value: int) -> None: ...
 
-    def items(self) -> Iterable[tuple[int]]:
+    @overload
+    def __setitem__(self, subscript: slice, value: bytes | bytearray) -> None: ...
+
+    def __setitem__(
+        self, subscript: int | slice | tuple[int, int], value: int | bytes | bytearray
+    ) -> None:
+        index_or_slice = self._subscript_to_index(subscript)
+        # Duplication and assertions to make the `mypy` type checker happy.
+        if isinstance(index_or_slice, int):
+            assert isinstance(value, int)
+            self.data[index_or_slice] = value
+        elif isinstance(index_or_slice, slice):
+            assert isinstance(value, (bytes, bytearray))
+            self.data[index_or_slice] = value
+        else:
+            raise TypeError("This should not happen")
+
+    def items(self) -> Iterable[tuple[int, int, int]]:
         """Generator of tuples (x, y, tile), for each of the tiles in this tilemap."""
         for y in range(self.height):
             for x in range(self.width):
@@ -395,7 +427,7 @@ class JetpackLevel:
     True
     """
 
-    tilemap: JetpackTilemap = field(default_factory=JetpackLevelTilemap)
+    tilemap: JetpackLevelTilemap = field(default_factory=JetpackLevelTilemap)
     door_x: int = 0
     door_y: int = 0
     player_x: int = 0
@@ -409,8 +441,8 @@ class JetpackLevel:
 
     # Filename is optional, and is added here just for convenience.
     # It's an easy way to identify a level among many others inside any data structure.
-    # TODO: Should it also support a Path in addition to str?
-    filename: str = ""
+    # TODO: Should it also support a Path in addition to str? I should pick one type and stick to it.
+    filename: str | Path = ""
 
     def __str__(self) -> str:
         return '<JetpackLevel {}"{}">'.format(
@@ -419,7 +451,9 @@ class JetpackLevel:
         )
 
     @classmethod
-    def unpack(cls, stream: BinaryIO, filename: str | Path = None) -> JetpackLevel:
+    def unpack(
+        cls, stream: BinaryIO, filename: Optional[str | Path] = None
+    ) -> JetpackLevel:
         obj = cls()
         if filename is None:
             # Try getting the filename from the file-like object.
@@ -430,10 +464,10 @@ class JetpackLevel:
             obj.filename = filename
 
         obj.tilemap = JetpackLevelTilemap.unpack(stream)
-        obj.door_x, obj.door_y = unpack_stream("BB", stream)
-        obj.player_x, obj.player_y = unpack_stream("BB", stream)
+        obj.door_x, obj.door_y = unpack_ints("BB", stream)
+        obj.player_x, obj.player_y = unpack_ints("BB", stream)
         obj.enemies = [JetpackEnemy.unpack(stream) for _ in range(20)]
-        (obj.description,) = unpack_stream("26s", stream)
+        obj.description = unpack_bytes("26s", stream)
         return obj
 
     def pack(self) -> bytes:

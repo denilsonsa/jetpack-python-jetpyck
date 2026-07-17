@@ -1,10 +1,11 @@
 import struct
+from typing import BinaryIO, TypeIs
 
-__all__ = ["unpack_stream"]
+__all__ = ["unpack_stream", "unpack_int", "unpack_ints", "unpack_bytes"]
 
 
 # Why isn't this a built-in function already?
-def unpack_stream(format: str, stream: BinaryIO) -> tuple:
+def unpack_stream(format: str, stream: BinaryIO) -> tuple[object, ...]:
     r"""Given a struct format string and a binary file-like stream,
     reads from that stream the exact amount of bytes required for that format
     and unpacks those bytes, returning a tuple.
@@ -59,3 +60,30 @@ def unpack_stream(format: str, stream: BinaryIO) -> tuple:
             "Wanted {} bytes, but only {} bytes were read".format(size, len(buf))
         )
     return struct.unpack(format, buf)
+
+
+# More specific functions just to make the `mypy` type checker happy.
+# https://github.com/python/mypy/issues/20869
+# https://github.com/microsoft/pyright/issues/4727
+
+
+def is_tuple_of_ints(val: tuple[object, ...]) -> TypeIs[tuple[int, ...]]:
+    return all(isinstance(x, int) for x in val)
+
+
+def unpack_int(format: str, stream: BinaryIO) -> int:
+    (out,) = unpack_stream(format, stream)
+    assert isinstance(out, int)
+    return out
+
+
+def unpack_ints(format: str, stream: BinaryIO) -> tuple[int, ...]:
+    out = unpack_stream(format, stream)
+    assert is_tuple_of_ints(out)
+    return out
+
+
+def unpack_bytes(format: str, stream: BinaryIO) -> bytes:
+    (out,) = unpack_stream(format, stream)
+    assert isinstance(out, bytes)
+    return out
