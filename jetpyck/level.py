@@ -20,7 +20,13 @@ specific meaning in programming languages. Thus, this module refers the enemy
 "types" as "kinds". We have 8 enemy "kinds" in the game.
 """
 
-__all__ = ["JetpackEnemyKind", "JetpackEnemy", "JetpackLevelTilemap", "JetpackLevel"]
+__all__ = [
+    "JetpackEnemyKind",
+    "JetpackEnemy",
+    "JetpackLevelTilemap",
+    "JetpackLevel",
+    "JetpackLevelPack",
+]
 
 import struct
 
@@ -28,6 +34,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import IntEnum
 from pathlib import Path
+from warnings import warn
 
 # https://mypy.readthedocs.io/en/stable/more_types.html#function-overloading
 from typing import BinaryIO, Optional, overload
@@ -62,15 +69,21 @@ class JetpackEnemyKind(IntEnum):
     # Travels through bricks straight toward you
     BATBOT = 8
 
+    # TODO: Found in level 52 for some reason.
+    # TODO: Likely leftover garbage data.
+    UNKNOWN1 = 0x10
+    UNKNOWN2 = 0x19
+
 
 @dataclass
 class JetpackEnemy:
     r"""A single enemy instance in a level.
 
     Each enemy is encoded as 3 bytes:
-    1. The enemy kind.
-    2. The enemy X position.
-    3. The enemy Y position.
+
+    - 1 byte for the enemy kind.
+    - 1 byte for the enemy x position
+    - 1 byte for the enemy y position
 
     >>> e = JetpackEnemy(JetpackEnemyKind.FLITZER, 2, 3)
     >>> e.x, e.y
@@ -480,3 +493,60 @@ class JetpackLevel:
                 struct.pack("26s", self.description),
             ]
         )
+
+
+@dataclass
+class JetpackLevelPack:
+    r"""A level pack is the collection of built-in standard Jetpack levels,
+    located inside `JETLEV.DAT`.
+
+    The format is simple:
+
+    - 2 bytes matching exactly b'\x86\xE6'
+    - JetpackLevel, 506 bytes each.
+
+    The total filesize is (2 + 506 * how_many_levels) bytes.
+
+    The exact same format is used for the freeware 1.5 version with 100 levels,
+    for the Christmas Special with 10 levels, and for the shareware version
+    with 10 levels.
+
+    The meaning of the first two bytes is unknown.
+
+    ---
+
+    TODO: Add tests loading a real-world levelpack.
+    """
+
+    magic: bytes = b"\x86\xe6"
+    levels: list[JetpackLevel] = field(default_factory=list)
+
+    @classmethod
+    def unpack(cls, stream: BinaryIO) -> JetpackLevelPack:
+        obj = cls()
+        magic = unpack_bytes("2s", stream)
+        if magic != obj.magic:
+            warn(
+                "Level pack magic number mismatch, expected {!r} but got {!r}.".format(
+                    obj.magic, magic
+                )
+            )
+        obj.magic = magic
+
+        start_position = stream.tell()
+        try:
+            while True:
+                level = JetpackLevel.unpack(stream)
+                start_position = stream.tell()
+                obj.levels.append(level)
+        except EOFError:
+            last_position = stream.tell()
+
+        if start_position != last_position:
+            warn(
+                "Ignored {} bytes of trailing data at the end of the file.".format(
+                    last_position - start_position
+                )
+            )
+
+        return obj
