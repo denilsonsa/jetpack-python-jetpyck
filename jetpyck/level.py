@@ -552,7 +552,11 @@ class JetpackLevelPack:
         return obj
 
     def pack(self) -> bytes:
-        # TODO: Implement me!
-        # Also, I should implement some kind of "is_valid" check on all classes.
+        # TODO: I should implement some kind of "is_valid" check on all classes.
         # I should not prevent writing invalid levels, but I should be able to detect those cases.
-        ...
+        return b"".join(
+            [
+                struct.pack("2s", self.magic),
+                *(level.pack() for level in self.levels),
+            ]
+        )
