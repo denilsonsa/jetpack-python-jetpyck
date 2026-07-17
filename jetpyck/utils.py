@@ -1,10 +1,11 @@
 import struct
 
-__all__ = ['unpack_stream']
+__all__ = ["unpack_stream"]
+
 
 # Why isn't this a built-in function already?
 def unpack_stream(format: str, stream: BinaryIO) -> tuple:
-    r'''Given a struct format string and a binary file-like stream,
+    r"""Given a struct format string and a binary file-like stream,
     reads from that stream the exact amount of bytes required for that format
     and unpacks those bytes, returning a tuple.
 
@@ -49,10 +50,12 @@ def unpack_stream(format: str, stream: BinaryIO) -> tuple:
     ...
     EOFError: ...
     >>> stream.close()
-    '''
+    """
 
     size = struct.calcsize(format)
     buf = stream.read(size)
     if len(buf) != size:
-        raise EOFError('Wanted {} bytes, but only {} bytes were read'.format(size, len(buf)))
+        raise EOFError(
+            "Wanted {} bytes, but only {} bytes were read".format(size, len(buf))
+        )
     return struct.unpack(format, buf)
