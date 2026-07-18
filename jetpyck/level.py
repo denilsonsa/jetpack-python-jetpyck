@@ -38,13 +38,13 @@ __all__ = [
 import struct
 
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, KW_ONLY, InitVar
 from enum import IntEnum
 from pathlib import Path
 from warnings import warn
 
 # https://mypy.readthedocs.io/en/stable/more_types.html#function-overloading
-from typing import BinaryIO, Optional, overload
+from typing import BinaryIO, ClassVar, Optional, overload
 
 from .utils import unpack_int, unpack_ints, unpack_bytes
 
@@ -285,6 +285,67 @@ class JetpackLevelTilemap:
     bytearray(b'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
     >>> rows[2]
     bytearray(b'456789:;<=>?@ABCDEFGHIJKLM')
+
+    Although the original game has fixed level dimensions, this class supports
+    other sizes as well.
+
+    >>> normalmap = JetpackLevelTilemap()
+    >>> normalmap  # doctest: +ELLIPSIS
+    JetpackLevelTilemap(b'...')
+    >>> normalmap.width, normalmap.height
+    (26, 16)
+    >>> small = JetpackLevelTilemap(width=6, height=4)
+    >>> small  # doctest: +ELLIPSIS
+    JetpackLevelTilemap(b'...', width=6, height=4)
+    >>> len(small)
+    24
+    >>> len(small.data)
+    24
+
+    And if you ever edit the tile data, please make sure the amount of tiles is
+    correct.
+
+    >>> small.pack()  # doctest: +ELLIPSIS
+    b'...'
+    >>> small[0:5] = [1, 2, 3, 4]  # Oops! Too few tiles!
+    >>> len(small.data)
+    23
+    >>> small.pack()
+    Traceback (most recent call last):
+    ...
+    ValueError: ...
+    >>> small[0:4] = [1, 2, 3, 4, 5, 6]  # Oops! Too many tiles!
+    >>> len(small.data)
+    25
+    >>> small.pack()
+    Traceback (most recent call last):
+    ...
+    ValueError: ...
+
+    The tile data can be passed during initialization.
+
+    >>> import random
+    >>> JetpackLevelTilemap(random.randrange(120) for i in range(26 * 16))  # doctest: +ELLIPSIS
+    JetpackLevelTilemap(b'...')
+    >>> JetpackLevelTilemap([0, 1, 2, 3], width=2, height=2)
+    JetpackLevelTilemap(b'\x00\x01\x02\x03', width=2, height=2)
+    >>> JetpackLevelTilemap(b'ABCDEF', width=3, height=2)
+    JetpackLevelTilemap(b'ABCDEF', width=3, height=2)
+
+    It doesn't matter if the parameter is mutable. The initialization always
+    makes a copy of the parameter. This makes the code more predictable with
+    fewer surprises.
+
+    >>> mutable_param = bytearray(b'GHIJKL')
+    >>> level = JetpackLevelTilemap(mutable_param, width=2, height=3)
+    >>> level
+    JetpackLevelTilemap(b'GHIJKL', width=2, height=3)
+    >>> mutable_param[0] = b'XY'[0]
+    >>> level[1] = b'XY'[1]
+    >>> mutable_param
+    bytearray(b'XHIJKL')
+    >>> level
+    JetpackLevelTilemap(b'GYIJKL', width=2, height=3)
     """
 
     # This internal data could have been implemented in several ways:
@@ -292,10 +353,29 @@ class JetpackLevelTilemap:
     # - bytearray (mutable array of bytes)
     # - array (mutable array of 8-bit integers or other word sizes)
     # I had to pick one, but any of these would have worked.
-    data: bytearray = field(default_factory=lambda: bytearray(26 * 16))
+    data: bytearray = field(init=False)
+    tiledata: InitVar[Optional[Iterable[int]]] = None
+
+    _: KW_ONLY
     # The original Jetpack levels are hard-coded to 26x16 tiles.
-    width: int = 26
-    height: int = 16
+    default_width: ClassVar[int] = 26
+    default_height: ClassVar[int] = 16
+    width: int = default_width
+    height: int = default_height
+
+    def __post_init__(self, tiledata: Optional[Iterable[int]]) -> None:
+        if tiledata is None:
+            self.data = bytearray(self.width * self.height)
+        else:
+            self.data = bytearray(tiledata)
+
+    def __repr__(self) -> str:
+        if self.width == self.default_width and self.height == self.default_height:
+            return "JetpackLevelTilemap({!r})".format(bytes(self.data))
+        else:
+            return "JetpackLevelTilemap({!r}, width={!r}, height={!r})".format(
+                bytes(self.data), self.width, self.height
+            )
 
     @classmethod
     def unpack(
@@ -317,6 +397,13 @@ class JetpackLevelTilemap:
         return obj
 
     def pack(self) -> bytes:
+        assert len(self) == self.width * self.height
+        if len(self.data) != len(self):
+            raise ValueError(
+                "Data length mismatch. {} tiles found, but expected {}x{}={}".format(
+                    len(self.data), self.width, self.height, self.width * self.height
+                )
+            )
         return bytes(self.data)
 
     def __len__(self) -> int:
@@ -332,7 +419,8 @@ class JetpackLevelTilemap:
         self, subscript: int | slice | tuple[int, int]
     ) -> int | slice:
         """Supports multiple syntaxes:
-        tilemap[123]   -> int in range 0..len(tilemap)
+        tilemap[123]   -> int in range 0..len(tilemap)-1
+        tilemap[-123]  -> int in range -1..-len(tilemap)
         tilemap[4, 6]  -> separate coordinates for x and y
         tilemap[12:34] -> slice of two (or three) integers
         """
@@ -454,11 +542,13 @@ class JetpackLevel:
     door_y: int = 0
     player_x: int = 0
     player_y: int = 0
+    # TODO: Perhaps make a copy of this list to reduce surprises?
     enemies: list[JetpackEnemy] = field(
         default_factory=lambda: [JetpackEnemy() for _ in range(20)]
     )
     # TODO: Maybe the description should be `str` instead of `bytes`.
     # TODO: Maybe we should have a desc getter/setter that would automatically convert/pad/trim the description string.
+    # TODO: Make a copy of this during initialization. Or perhaps just the setter is enough.
     description: bytes | bytearray = b" " * 26
 
     # Filename is optional, and is added here just for convenience.
@@ -572,6 +662,7 @@ class JetpackLevelPack:
     """
 
     magic: bytes = b"\x86\xe6"
+    # TODO: Perhaps make a copy of this list to reduce surprises?
     levels: list[JetpackLevel] = field(default_factory=list)
 
     def __len__(self) -> int:
