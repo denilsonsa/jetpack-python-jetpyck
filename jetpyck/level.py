@@ -13,6 +13,13 @@ encoded version as `bytes`. In other words, `pack` will serialize the object
 into `bytes`, which can later be combined with other bytes and written to a
 file.
 
+There is a slight asymmetry in those methods. `unpack` expects to read from a
+BinaryIO (e.g. from a file-like object). That's because it increments the
+position in the stream while consuming the data. However, `pack` returns a
+static `bytes` object, which is just a binary sequence. That's because this
+binary data will likely be concatenated with others and further processed
+before being written to a file.
+
 ## Naming is hard
 
 Although the in-game help describes enemy "types", the word "type" has a very
@@ -88,11 +95,11 @@ class JetpackEnemy:
     >>> e = JetpackEnemy(JetpackEnemyKind.FLITZER, 2, 3)
     >>> e.x, e.y
     (2, 3)
-    >>> buf = e.pack()
-    >>> buf
+    >>> bindata = e.pack()
+    >>> bindata
     b'\x06\x02\x03'
     >>> from io import BytesIO
-    >>> with BytesIO(buf) as stream:
+    >>> with BytesIO(bindata) as stream:
     ...     other = JetpackEnemy.unpack(stream)
     >>> e is other
     False
@@ -362,21 +369,23 @@ class JetpackLevelTilemap:
     def __setitem__(self, subscript: int | tuple[int, int], value: int) -> None: ...
 
     @overload
-    def __setitem__(self, subscript: slice, value: bytes | bytearray) -> None: ...
+    def __setitem__(self, subscript: slice, value: Iterable[int]) -> None: ...
 
     def __setitem__(
-        self, subscript: int | slice | tuple[int, int], value: int | bytes | bytearray
+        self, subscript: int | slice | tuple[int, int], value: int | Iterable[int]
     ) -> None:
         index_or_slice = self._subscript_to_index(subscript)
-        # Duplication and assertions to make the `mypy` type checker happy.
-        if isinstance(index_or_slice, int):
-            assert isinstance(value, int)
+        # Duplication to make the `mypy` type checker happy.
+        if isinstance(index_or_slice, int) and isinstance(value, int):
             self.data[index_or_slice] = value
-        elif isinstance(index_or_slice, slice):
-            assert isinstance(value, (bytes, bytearray))
+        elif isinstance(index_or_slice, slice) and isinstance(value, Iterable):
             self.data[index_or_slice] = value
         else:
-            raise TypeError("This should not happen")
+            raise TypeError(
+                "Invalid types in the assignment: [{}] = {}.".format(
+                    type(index_or_slice), type(value)
+                )
+            )
 
     def items(self) -> Iterable[tuple[int, int, int]]:
         """Generator of tuples (x, y, tile), for each of the tiles in this tilemap."""
@@ -427,11 +436,11 @@ class JetpackLevel:
     >>> len(lvl.enemies)
     20
 
-    >>> buf = lvl.pack()
-    >>> len(buf)
+    >>> bindata = lvl.pack()
+    >>> len(bindata)
     506
     >>> from io import BytesIO
-    >>> with BytesIO(buf) as stream:
+    >>> with BytesIO(bindata) as stream:
     ...     # Simulating a file object opened from a real file.
     ...     stream.name = 'EXAMPLE.JET'
     ...     loadedlvl = JetpackLevel.unpack(stream)
@@ -516,10 +525,91 @@ class JetpackLevelPack:
     ---
 
     TODO: Add tests loading a real-world levelpack.
+
+    >>> pack1 = JetpackLevelPack(levels=[
+    ...     JetpackLevel(description=b'This is the first level   '),
+    ...     JetpackLevel(description=b'This is the second level  '),
+    ...     JetpackLevel(description=b'This is the fourth level  '),
+    ...     JetpackLevel(description=b'This is the third level   '),
+    ... ])
+
+    For simplicity and convenience, this JetpackLevelPack class also behaves as
+    a sequence.
+
+    >>> pack1[2].description
+    b'This is the fourth level  '
+    >>> pack1[3].description
+    b'This is the third level   '
+    >>> pack1[2:4] = reversed(pack1[2:4])
+    >>> pack1[2].description
+    b'This is the third level   '
+    >>> pack1[3].description
+    b'This is the fourth level  '
+    >>> pack1[-1].description
+    b'This is the fourth level  '
+
+    >>> for n, lvl in enumerate(pack1):
+    ...     for i in range(len(lvl.tilemap)):
+    ...         lvl.tilemap[i] = (i * (n+1)) % 120
+    >>> pack1[2].tilemap[1]
+    3
+    >>> pack1[3].tilemap[2]
+    8
+
+    >>> bindata = pack1.pack()
+    >>> 2 + 506 * 4
+    2026
+    >>> len(bindata)
+    2026
+    >>> bindata[0:2]
+    b'\x86\xe6'
+
+    >>> from io import BytesIO
+    >>> with BytesIO(bindata) as stream:
+    ...     pack2 = JetpackLevelPack.unpack(stream)
+    >>> pack1 == pack2
+    True
     """
 
     magic: bytes = b"\x86\xe6"
     levels: list[JetpackLevel] = field(default_factory=list)
+
+    def __len__(self) -> int:
+        return len(self.levels)
+
+    @overload
+    def __getitem__(self, index_or_slice: int) -> JetpackLevel: ...
+
+    @overload
+    def __getitem__(self, index_or_slice: slice) -> list[JetpackLevel]: ...
+
+    def __getitem__(
+        self, index_or_slice: int | slice
+    ) -> JetpackLevel | list[JetpackLevel]:
+        return self.levels[index_or_slice]
+
+    @overload
+    def __setitem__(self, index_or_slice: int, value: JetpackLevel) -> None: ...
+
+    @overload
+    def __setitem__(
+        self, index_or_slice: slice, value: Iterable[JetpackLevel]
+    ) -> None: ...
+
+    def __setitem__(
+        self, index_or_slice: int | slice, value: JetpackLevel | Iterable[JetpackLevel]
+    ) -> None:
+        # Duplication to make the `mypy` type checker happy.
+        if isinstance(index_or_slice, int) and isinstance(value, JetpackLevel):
+            self.levels[index_or_slice] = value
+        elif isinstance(index_or_slice, slice) and isinstance(value, Iterable):
+            self.levels[index_or_slice] = value
+        else:
+            raise TypeError(
+                "Invalid types in the assignment: [{}] = {}.".format(
+                    type(index_or_slice), type(value)
+                )
+            )
 
     @classmethod
     def unpack(cls, stream: BinaryIO) -> JetpackLevelPack:
