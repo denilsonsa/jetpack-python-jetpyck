@@ -4,12 +4,6 @@
 // ImHex pattern for inspecting `JETPACK.CFG` from the MS-DOS game Jetpack.
 //
 // This file is very simple, it only contains 5 bytes.
-//
-// See also:
-// https://www.adeptsoftware.com/jetpack/
-// https://github.com/WerWolv/ImHex
-// https://github.com/WerWolv/ImHex-Patterns
-// https://docs.werwolv.net/documentation
 
 import std.io;
 

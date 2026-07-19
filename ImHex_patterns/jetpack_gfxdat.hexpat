@@ -14,12 +14,6 @@
 // hexpat file (either because I don't know the Pattern language well enough,
 // or because it is currently impossible). Thus, the highlighting of the pixel
 // bit stream is incorrect.
-// 
-// See also:
-// https://www.adeptsoftware.com/jetpack/
-// https://github.com/WerWolv/ImHex
-// https://github.com/WerWolv/ImHex-Patterns
-// https://docs.werwolv.net/documentation
 
 import std.io;
 import std.mem;

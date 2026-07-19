@@ -9,12 +9,6 @@
 //
 // The built-in level pack is just a concatenation of multiple levels, prefixed
 // by a mysterious two-byte magic number.
-//
-// See also:
-// https://www.adeptsoftware.com/jetpack/
-// https://github.com/WerWolv/ImHex
-// https://github.com/WerWolv/ImHex-Patterns
-// https://docs.werwolv.net/documentation
 
 import std.io;
 import std.mem;

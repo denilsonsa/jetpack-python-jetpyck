@@ -1,4 +1,4 @@
-#pragma description Jetpack Demo
+#pragma description Jetpack demo JETDEMO.DAT
 #pragma author denilsonsa
 
 // ImHex pattern for inspecting `JETDEMO.DAT` from the MS-DOS game Jetpack.
@@ -11,12 +11,6 @@
 // number, followed by one byte for each frame of input.
 //
 // Unfortunately, I'm not aware of any tool for recording demos.
-//
-// See also:
-// https://www.adeptsoftware.com/jetpack/
-// https://github.com/WerWolv/ImHex
-// https://github.com/WerWolv/ImHex-Patterns
-// https://docs.werwolv.net/documentation
 
 import std.io;
 import std.mem;
