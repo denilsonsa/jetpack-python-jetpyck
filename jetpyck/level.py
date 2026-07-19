@@ -599,7 +599,9 @@ class JetpackLevel:
     max_enemies: ClassVar[int] = 20
     # TODO: Perhaps make a copy of this list to reduce surprises?
     enemies: list[JetpackEnemy] = field(
-        default_factory=lambda: [JetpackEnemy() for _ in range(JetpackLevel.max_enemies)]
+        default_factory=lambda: [
+            JetpackEnemy() for _ in range(JetpackLevel.max_enemies)
+        ]
     )
     # TODO: Maybe the description should be `str` instead of `bytes`.
     # TODO: Maybe we should have a desc getter/setter that would automatically convert/pad/trim the description string.
@@ -655,7 +657,9 @@ class JetpackLevel:
             self.enemies.append(JetpackEnemy())
         if len(self.enemies) > self.max_enemies:
             raise ValueError(
-                "Expected {} enemies, but {} are defined".format(self.max_enemies, len(self.enemies))
+                "Expected {} enemies, but {} are defined".format(
+                    self.max_enemies, len(self.enemies)
+                )
             )
         return b"".join(
             [
