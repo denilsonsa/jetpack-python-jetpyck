@@ -3,7 +3,10 @@
 import doctest
 import sys
 
-from jetpyck import level, utils
+# Hack to make it possible to test it without installing it.
+sys.path.insert(0, "./src")
+
+from jetpyck import gfxdat, level, utils
 
 
 def run_tests():
@@ -13,7 +16,7 @@ def run_tests():
     total_modules = 0
     total_failure = 0
     total_tests = 0
-    for module in [level, utils]:
+    for module in [gfxdat, level, utils]:
         failure_count, test_count = doctest.testmod(module, optionflags=doctest.IGNORE_EXCEPTION_DETAIL)
         summary.append(
             "{}: {} failures out of {} tests".format(module.__name__, failure_count, test_count)
