@@ -55,8 +55,7 @@ from enum import IntEnum
 from pathlib import Path
 from warnings import warn
 
-# https://mypy.readthedocs.io/en/stable/more_types.html#function-overloading
-from typing import BinaryIO, ClassVar, Optional, overload
+from typing import BinaryIO, ClassVar, Optional, Self, overload
 
 from .utils import unpack_int, unpack_ints, unpack_bytes
 
@@ -124,7 +123,7 @@ class JetpackEnemy:
     y: int = 0
 
     @classmethod
-    def unpack(cls, stream: BinaryIO) -> JetpackEnemy:
+    def unpack(cls, stream: BinaryIO) -> Self:
         obj = cls()
         obj.kind = JetpackEnemyKind(unpack_int("B", stream))
         obj.x, obj.y = unpack_ints("BB", stream)
@@ -396,7 +395,7 @@ class JetpackLevelTilemap:
         *,
         width: Optional[int] = None,
         height: Optional[int] = None
-    ) -> JetpackLevelTilemap:
+    ) -> Self:
         obj = cls()
 
         # Allow overriding the original hard-coded level dimensions
@@ -633,9 +632,7 @@ class JetpackLevel:
         return self.tilemap.height
 
     @classmethod
-    def unpack(
-        cls, stream: BinaryIO, filename: Optional[str | Path] = None
-    ) -> JetpackLevel:
+    def unpack(cls, stream: BinaryIO, filename: Optional[str | Path] = None) -> Self:
         obj = cls()
         if filename is None:
             # Try getting the filename from the file-like object.
@@ -781,7 +778,7 @@ class JetpackLevelPack:
             )
 
     @classmethod
-    def unpack(cls, stream: BinaryIO) -> JetpackLevelPack:
+    def unpack(cls, stream: BinaryIO) -> Self:
         obj = cls()
         magic = unpack_bytes("2s", stream)
         if magic != obj.magic:
