@@ -1,5 +1,17 @@
 """jetpyck.level is a module for handling Jetpack levels.
 
+The game is distributed with a pack of built-in levels at the `JETLEV.DAT`
+file. The shareware version has 10 levels, the Christmas Special version has
+another 10 levels, and the full game has 100 levels. The file format is
+identical across these versions.
+
+User-created levels are saved individually as `LEVELS/*.JET` files. The game
+does not support subdirectories, all user-created levels are stored inside the
+same directory. The shareware version can only save or load a single custom
+level, with the name `REGISTER.JET`. The Christmas Special version is the same,
+but with the `XMASLEVL.JET` name. The full version can save many levels with
+any name (respecting the DOS limit of 8 characters plus the `.JET` extension).
+
 ## Serialization
 
 Most classes have a pair of methods: `unpack` and `pack`.
@@ -598,6 +610,11 @@ class JetpackLevel:
     # It's an easy way to identify a level among many others inside any data structure.
     # TODO: Should it also support a Path in addition to str? I should pick one type and stick to it.
     filename: str | Path = ""
+
+    # TODO: Idea: we can have a .sprites() function that returns a list of all sprites in the level.
+    # In other words, it returns both enemies and the player and the door (with their respective coords).
+    # To implement that, I can create a new class JetpackSpriteKind that derives from JetpackEnemyKind.
+    # Why? Just because it simplifies the renderer.
 
     def __str__(self) -> str:
         return '<JetpackLevel {}"{}">'.format(
