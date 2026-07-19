@@ -1,4 +1,11 @@
-# unamed Jetpack repository
+# jetpack-python-jetpyck
+
+Python library to read/write data from the 1993 MS-DOS game Jetpack.
+
+Why the name `jetpyck`? Because it is a Python module, and I had to include
+`py` in the name. So I made terrible pun between "jetpack" and "py". How to
+pronounce this name? There is no official way, say it out loud however you
+like.
 
 ## About Jetpack
 
