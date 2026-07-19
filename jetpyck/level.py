@@ -535,6 +535,48 @@ class JetpackLevel:
     >>> lvl.filename = 'EXAMPLE.JET'
     >>> lvl == loadedlvl
     True
+
+    There are a couple of shortcuts for convenience.
+
+    >>> lvl.tilemap.width
+    26
+    >>> lvl.width
+    26
+    >>> lvl.tilemap.height
+    16
+    >>> lvl.height
+    16
+    >>> lvl.width = 20
+    Traceback (most recent call last):
+    ...
+    AttributeError: property 'width' of 'JetpackLevel' object has no setter
+    >>> lvl.height = 20
+    Traceback (most recent call last):
+    ...
+    AttributeError: property 'height' of 'JetpackLevel' object has no setter
+
+    If for some reason the list of enemies is shorter than expected, the list
+    is automatically expanded upon packing.
+
+    >>> len(lvl.enemies)
+    20
+    >>> lvl.enemies = [JetpackEnemy(JetpackEnemyKind(i), i, i) for i in range(1,9)]
+    >>> len(lvl.enemies)
+    8
+    >>> lvl.enemies[-1]
+    JetpackEnemy(kind=<JetpackEnemyKind.BATBOT: 8>, x=8, y=8)
+    >>> bindata = lvl.pack()
+    >>> len(lvl.enemies)
+    20
+    >>> lvl.enemies[-1]
+    JetpackEnemy(kind=<JetpackEnemyKind.NONE: 0>, x=0, y=0)
+    >>> lvl.enemies.append(JetpackEnemy)
+    >>> len(lvl.enemies)
+    21
+    >>> lvl.pack()
+    Traceback (most recent call last):
+    ...
+    ValueError: ...
     """
 
     tilemap: JetpackLevelTilemap = field(default_factory=JetpackLevelTilemap)
@@ -542,9 +584,10 @@ class JetpackLevel:
     door_y: int = 0
     player_x: int = 0
     player_y: int = 0
+    max_enemies: ClassVar[int] = 20
     # TODO: Perhaps make a copy of this list to reduce surprises?
     enemies: list[JetpackEnemy] = field(
-        default_factory=lambda: [JetpackEnemy() for _ in range(20)]
+        default_factory=lambda: [JetpackEnemy() for _ in range(JetpackLevel.max_enemies)]
     )
     # TODO: Maybe the description should be `str` instead of `bytes`.
     # TODO: Maybe we should have a desc getter/setter that would automatically convert/pad/trim the description string.
@@ -562,6 +605,14 @@ class JetpackLevel:
             self.description.decode("ascii"),
         )
 
+    @property
+    def width(self) -> int:
+        return self.tilemap.width
+
+    @property
+    def height(self) -> int:
+        return self.tilemap.height
+
     @classmethod
     def unpack(
         cls, stream: BinaryIO, filename: Optional[str | Path] = None
@@ -578,11 +629,17 @@ class JetpackLevel:
         obj.tilemap = JetpackLevelTilemap.unpack(stream)
         obj.door_x, obj.door_y = unpack_ints("BB", stream)
         obj.player_x, obj.player_y = unpack_ints("BB", stream)
-        obj.enemies = [JetpackEnemy.unpack(stream) for _ in range(20)]
+        obj.enemies = [JetpackEnemy.unpack(stream) for _ in range(cls.max_enemies)]
         obj.description = unpack_bytes("26s", stream)
         return obj
 
     def pack(self) -> bytes:
+        while len(self.enemies) < self.max_enemies:
+            self.enemies.append(JetpackEnemy())
+        if len(self.enemies) > self.max_enemies:
+            raise ValueError(
+                "Expected {} enemies, but {} are defined".format(self.max_enemies, len(self.enemies))
+            )
         return b"".join(
             [
                 self.tilemap.pack(),
