@@ -17,9 +17,13 @@ def run_tests():
     total_failure = 0
     total_tests = 0
     for module in [gfxdat, level, utils]:
-        failure_count, test_count = doctest.testmod(module, optionflags=doctest.IGNORE_EXCEPTION_DETAIL)
+        failure_count, test_count = doctest.testmod(
+            module, optionflags=doctest.IGNORE_EXCEPTION_DETAIL
+        )
         summary.append(
-            "{}: {} failures out of {} tests".format(module.__name__, failure_count, test_count)
+            "{}: {} failures out of {} tests".format(
+                module.__name__, failure_count, test_count
+            )
         )
         total_modules += 1
         total_failure += failure_count
