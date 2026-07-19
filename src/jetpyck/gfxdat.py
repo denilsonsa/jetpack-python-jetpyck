@@ -1,4 +1,4 @@
-"""jetpyck.gfxdat is a module for handling Jetpack `*.DAT` files containing
+r"""jetpyck.gfxdat is a module for handling Jetpack `*.DAT` files containing
 graphic assets.
 
 Both the shareware version and the full version have the exact same graphic
@@ -53,6 +53,16 @@ file. It will also write a simple one-byte file `_JETP_.DAT` containing the
 currently selected choice: b`\x00` for `A`, b`\x01` for B, and so on. In other
 words, the byte is the zero-based index of the letter in alphabetical order.
 
+---
+
+Example of decoding the names from graphics modules:
+
+>>> # binname = Path('_JETP_A.DAT').read_bytes()
+>>> binname = b'fQSAXUF\x14~Q@DUW_'
+>>> jswitch_name_decode(binname)
+'Regular Jetpack'
+>>> binname == jswitch_name_encode(jswitch_name_decode(binname))
+True
 """
 
 from collections.abc import Iterable
@@ -68,6 +78,11 @@ __all__ = [
     # It's not generally useful outside this module.
     # Yet, if anyone wants, it's always possible to explicitly import it.
     # "BitGenerator",
+    #
+    # Not including these functions in the default "*" import.
+    # If anyone wants, just import them explicitly.
+    # "jswitch_name_decode",
+    # "jswitch_name_encode",
 ]
 
 
