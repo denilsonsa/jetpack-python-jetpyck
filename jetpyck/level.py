@@ -65,7 +65,7 @@ class JetpackEnemyKind(IntEnum):
     """There are 8 enemies in Jetpack.
     Enemies are active sprites that move in the level.
 
-    As per the buil-in help screens:
+    As per the built-in help screens:
     > Eight different types of enemies
     > will try to put an end to your quest
     """
@@ -149,7 +149,7 @@ class JetpackLevelTilemap:
     until the entire grid is serialized.
 
     For simplicity and convenience, this JetpackLevelTilemap class also behaves
-    as a sequence. There is no need to acces the internal `.data` structure.
+    as a sequence. There is no need to access the internal `.data` structure.
     It also supports (x,y) as indexes.
 
     ---
@@ -508,7 +508,7 @@ class JetpackLevel:
     - 2 bytes for the x,y position of the exit door (in range ??..??)
     - 2 bytes for the x,y the player start position (in range ??..??)
     - 60 bytes for the enemies (20 enemies in total)
-    - 26 bytes for the the level name (AKA description)
+    - 26 bytes for the level name (AKA description)
 
     For a total of 506 bytes.
 
