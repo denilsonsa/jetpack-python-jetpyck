@@ -53,6 +53,99 @@ file. It will also write a simple one-byte file `_JETP_.DAT` containing the
 currently selected choice: b`\x00` for `A`, b`\x01` for B, and so on. In other
 words, the byte is the zero-based index of the letter in alphabetical order.
 
+## SCLM.DAT
+
+`SCLM.DAT` contains the short intro animation for the company logo.
+
+On older releases, it had 54508 bytes and showed:
+
+> PRESENTED BY
+> Software Creations
+> HOME OF THE AUTHORS
+
+On the newer releases (such as the 1.5 freeware full version), it has 40235
+bytes and shows the IMPULSE logo.
+
+The file format is exactly the same across versions. In fact, it is possible to
+overwrite the `SCLM.DAT` file from one version onto another version, and the
+animation will play correctly.
+
+However, the encoding is still unknown, and thus still unsupported in this
+module.
+
+## Color cycling
+
+Color cycling was a common technique for creating animations on palette-based
+graphics using very few resources. Since the pixels are just indexes to a color
+palette, it is possible to render animations by just changing the RGB values of
+certain colors of the palette. This requires very little extra storage (a few
+bytes to define which colors have to be changed) and very little CPU usage
+(computing the new colors and updating those colors in the palette), while
+changing the colors of all pixels on the screen that point to the affected
+indexes. Although limited, this is much cheaper than having multiple frames of
+animation.
+
+* <https://en.wikipedia.org/wiki/Color_cycling>
+* <https://amiga.lychesis.net/specials/ColorCycling.html>
+* <https://www.youtube.com/watch?v=aMcJ1Jvtef0>
+
+[Deluxe Paint](https://en.wikipedia.org/wiki/Deluxe_Paint) was likely the most
+famous bitmap graphics editor (or pixel art editor) around 1985 to 1995.
+Originating from Amiga and later also released for DOS, it had color cycling
+support since its first version.
+
+In modern era, very few editors have native support for color cycling
+animations:
+
+* [DPaint.js](https://github.com/steffest/dpaint-js)
+* [PyDPainter](https://github.com/mriale/PyDPainter)
+* [Pro Motion](https://www.cosmigo.com/pixel_animation_software/features)
+
+[This feature is planned](https://github.com/aseprite/aseprite/issues/1067),
+but not yet implemented, in [Aseprite](https://github.com/aseprite/aseprite).
+
+Regarding common file formats, only [ILBM](https://en.wikipedia.org/wiki/ILBM)
+(Interleaved Bitmap) files have native support for storing color cycles, which
+is stored inside `CRNG` chunks.
+
+## Color cycling in Jetpack
+
+JetPack implemented the following animations as just color cycles:
+
+* flashing dashes at the main menu items
+* blinking lights at the jetpack picture in the help screen
+* blinking light on top of the jetpack of the player sprite
+* rotating stunner power-up item
+* flashing shield power-up item
+* blinking light at the trackbot enemy
+* blinking/spinning homer enemy
+* blinking squares for the energy charger tiles
+* walking lines for the energy drain tiles
+* conveyor belt movement
+* stairs moving up or down
+* red pulsing effect at the high scores screen
+
+The game runs in VGA mode `13h`, which runs at 70Hz. The game updates the
+palette once every 4 frames in average, which means around 17.5Hz or about 57ms
+between each step of the color cycling animation.
+
+There are three color ranges that get animated:
+
+* 4 colors (from 247 until 250)
+    * white → middle gray → dark gray → middle gray
+    * colors shifted forward (i.e. 248 receives the RGB color from 247, and
+      247 receives from 250)
+    * used for the stairs, and for the jetpack
+* 4 colors (from 251 until 254)
+    * dark gray → gradient → light gray
+    * colors shifted forward (i.e. 252 receives the RGB color from 251, and
+      251 receives from 254)
+    * used for the power-up items, for the conveyor belts, for the energy
+      charger/drain tiles, and for the trackbot and homer enemies
+* ? colors (from ? until ?)
+    * red → gradient → white
+    * used for the high scores screen
+
 ---
 
 Example of decoding the names from graphics modules:
@@ -66,7 +159,10 @@ True
 """
 
 from collections.abc import Iterable
+from dataclasses import dataclass, field
+from enum import Enum
 from itertools import batched
+from typing import Self
 from warnings import warn
 
 # Please install `pillow`, it's the most popular library for working with
@@ -130,6 +226,197 @@ class BitGenerator:
 
     def get_byte(self) -> int:
         return self.get_bits(8)
+
+
+def color_6bit_to_8bit(channel: int) -> int:
+    """Given a 6-bit value (from VGA), convert to an 8-bit value (for RGB8).
+
+    >>> color_6bit_to_8bit(0)
+    0
+    >>> color_6bit_to_8bit(31)
+    125
+    >>> color_6bit_to_8bit(32)
+    130
+    >>> color_6bit_to_8bit(63)
+    255
+
+    Converting VGA -> RGB8 -> VGA should return to the same color.
+
+    >>> for x in range(64):
+    ...     y = color_6bit_to_8bit(x)
+    ...     z = color_8bit_to_6bit(y)
+    ...     assert x == z, "{} -> {} -> {}".format(x, y, z)
+
+    The colors should be uniformly distributed.
+
+    >>> rgb8 = [color_6bit_to_8bit(x) for x in range(64)]
+    >>> from itertools import pairwise
+    >>> deltas = [next - prev for prev, next in pairwise(rgb8)]
+    >>> len(deltas)
+    63
+    >>> expected = (([4] * 15) + [5]) * 4
+    >>> expected = expected[:-1]
+    >>> assert deltas == expected, (deltas, expected)
+
+    >>> color_6bit_to_8bit(-1)
+    Traceback (most recent call last):
+    ...
+    ValueError: ...
+    >>> color_6bit_to_8bit(64)
+    Traceback (most recent call last):
+    ...
+    ValueError: ...
+    """
+
+    if 0 <= channel < 64:
+        return (channel << 2) | (channel >> 4)
+    else:
+        raise ValueError(
+            "Color channel out of range, got {} but expected 0..63".format(channel)
+        )
+
+
+def color_8bit_to_6bit(channel: int) -> int:
+    """Given an 8-bit value (from RGB8), convert to a 6-bit value (for VGA).
+
+    >>> color_8bit_to_6bit(0)
+    0
+    >>> color_8bit_to_6bit(31)
+    7
+    >>> color_8bit_to_6bit(63)
+    15
+    >>> color_8bit_to_6bit(127)
+    31
+    >>> color_8bit_to_6bit(255)
+    63
+
+    Converting from 256 colors to 64 colors results in groups of 4 duplicate colors.
+
+    >>> rgb6 = [color_8bit_to_6bit(x) for x in range(256)]
+    >>> from itertools import chain
+    >>> expected = list(chain.from_iterable([c] * 4 for c in range(64)))
+    >>> assert rgb6 == expected, rgb6
+
+    >>> color_8bit_to_6bit(-1)
+    Traceback (most recent call last):
+    ...
+    ValueError: ...
+    >>> color_8bit_to_6bit(256)
+    Traceback (most recent call last):
+    ...
+    ValueError: ...
+    """
+
+    if 0 <= channel < 256:
+        return channel >> 2
+    else:
+        raise ValueError(
+            "Color channel out of range, got {} but expected 0..255".format(channel)
+        )
+
+
+class JetpackColorCycleDirection(Enum):
+    Forward = 1
+    Backward = 2
+    Bounce = 3
+
+    def __repr__(self) -> str:
+        cls_name = self.__class__.__name__
+        return f"{cls_name}.{self.name}"
+
+
+@dataclass
+class JetpackColorCycle:
+    """A color cycle is defined by:
+
+    - `first`: the index of the first color of the cycle
+    - `last`: the index of the last color of the cycle
+    - `direction`: how the colors are going to move
+
+    Observe how the limits of the color cycle are inclusive, which is different
+    from Python's range() behavior (where the second limit is exclusive).
+
+    >>> JetpackColorCycle.stairs()
+    JetpackColorCycle(first=247, last=250, direction=JetpackColorCycleDirection.Forward)
+    >>> JetpackColorCycle.belts()
+    JetpackColorCycle(first=251, last=254, direction=JetpackColorCycleDirection.Forward)
+    >>> cycle = JetpackColorCycle(120, 127)
+    >>> len(cycle)
+    8
+    >>> cycle[2]
+    122
+    >>> cycle[-1]
+    127
+    >>> 125 in cycle
+    True
+    """
+
+    first: int
+    last: int
+    direction: JetpackColorCycleDirection = JetpackColorCycleDirection.Forward
+
+    def __len__(self) -> int:
+        assert self.last >= self.first
+        return self.last - self.first + 1
+
+    def __getitem__(self, index: int) -> int:
+        if index < 0:
+            ret = self.last + 1 + index
+        else:
+            ret = self.first + index
+        if self.first <= ret <= self.last:
+            return ret
+        else:
+            raise IndexError("Index {} is out of range".format(index))
+
+    def __contains__(self, value: int) -> bool:
+        return self.first <= value <= self.last
+
+    @classmethod
+    def stairs(cls) -> Self:
+        return cls(247, 250)
+
+    @classmethod
+    def belts(cls) -> Self:
+        return cls(251, 254)
+
+
+class JetpackGfx:
+    # Mode 13h, or 0x13, sometimes called MCGA mode.
+    # 320x200 70Hz with 256 simultaneous colors (out of 18-bit RGB)
+    default_width = 320
+    default_height = 200
+
+    color_cycles: list[JetpackColorCycle] = field(
+        default_factory=lambda: [JetpackColorCycle.stairs(), JetpackColorCycle.belts()]
+    )
+
+    def __init__(self, *, width: int = default_width, height: int = default_height):
+        self.width = width
+        self.height = height
+        self.vga_palette = bytearray(256 * 3)
+        self.pixels = bytearray(self.width * self.height)
+
+    def __repr__(self) -> str:
+        return "<JetpackGfx {}x{} {!r}>".format(self.width, self.height, id(self))
+
+    @property
+    def palette_8bit(self) -> bytes:
+        """Returns the palette as RGB 8-bit (per channel) palette.
+
+        The Jetpack game stores the palette in VGA-friendly format, which is 3
+        bytes for RGB, but each channel only has 6 bits (from 0 until 63). Each
+        palette contains 256 colors out of a total of 262144 different colors
+        (18-bit RGB).
+
+        Most systems after VGA, and most file formats, use 8 bits per channel,
+        for a total of 16 million colors (24-bit RGB). This is also known as
+        RGB8 format.
+
+        This property converts the internal VGA-style palette into RGB8,
+        returning a `bytes` object.
+        """
+        return bytes(color_8bit_to_6bit(c) for c in self.vga_palette)
 
 
 def gfxdat_parser(rawdata: bytes) -> Image.Image:
