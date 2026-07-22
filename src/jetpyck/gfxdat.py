@@ -154,6 +154,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import IntEnum
 from functools import reduce
+from io import BytesIO
 from itertools import batched, chain
 from typing import IO, Iterator, Optional, Self
 from warnings import warn
@@ -558,6 +559,19 @@ class JetpackGfx:
     def __repr__(self) -> str:
         return "<JetpackGfx {}x{} {!r}>".format(self.width, self.height, id(self))
 
+    def _repr_png_(self) -> bytes:
+        """Renders this image as PNG, for display in Jupyter notebooks.
+
+        This is a lie. Since this image is passed directly to the browser, the
+        browser can just render other raster formats beyond PNG.
+
+        In this case, it can render as WEBP instead of PNG. And WEBP is much
+        smaller than GIF, and also smaller than APNG.
+        """
+        with BytesIO() as img:
+            self.save_as_webp(img, zoom=2)
+            return img.getvalue()
+
     @property
     def palette_8bit(self) -> bytes:
         """Returns the palette as RGB 8-bit (per channel) palette.
@@ -574,7 +588,7 @@ class JetpackGfx:
         This property converts the internal VGA-style palette into RGB8,
         returning a `bytes` object.
         """
-        return bytes(color_8bit_to_6bit(c) for c in self.palette_vga)
+        return bytes(color_6bit_to_8bit(c) for c in self.palette_vga)
 
     @property
     def n_frames(self) -> int:
@@ -653,7 +667,7 @@ class JetpackGfx:
     def generate_color_cycle_8bit_palettes(self) -> list[bytes]:
         """Returns a list of RGB8 palettes after color cycling has been applied."""
         return [
-            bytes(color_8bit_to_6bit(c) for c in pal)
+            bytes(color_6bit_to_8bit(c) for c in pal)
             for pal in self.generate_color_cycle_vga_palettes()
         ]
 
@@ -681,6 +695,7 @@ class JetpackGfx:
         palettes each frame for a full animation loop.
         """
         images = [self.get_image(zoom)]
+        # TODO: I'm rotating the color palette the wrong way. I need to investigate where, why, and fix the correct portion of the code. Including tests.
         palettes = self.generate_color_cycle_8bit_palettes()
         for pal in palettes[1:]:
             frame = images[0].copy()
@@ -690,6 +705,9 @@ class JetpackGfx:
         return images
 
     def save_as_gif(self, fp: PILFileParameter, zoom: int = 1) -> None:
+        # But the GIF file size is too large for no benefit.
+        # Let's avoid using GIF.
+        # TODO: Check if the palette is being preserved.
         images = self.get_images(zoom)
         images[0].save(
             fp,
@@ -697,22 +715,38 @@ class JetpackGfx:
             append_images=images[1:],
             duration=57,  # 57ms
             loop=0,
+            # Don't optimize the palette, keep it as is.
+            optimize=False,
+        )
+
+    def save_as_png(self, fp: PILFileParameter, zoom: int = 1) -> None:
+        # TODO: Check if the palette is being preserved.
+        image = self.get_image(zoom)
+        image.save(
+            fp,
+            format="png",
             optimize=True,
+            compress_level=9,
         )
 
     def save_as_apng(self, fp: PILFileParameter, zoom: int = 1) -> None:
+        # TODO: Either APNG images are not supported by browsers anymore, or Pillow isn't saving it correctly.
+        # Or I should just give up on APNG. It is not worth the trouble.
         images = self.get_images(zoom)
         images[0].save(
             fp,
             format="png",
             append_images=images[1:],
+            save_all=True,
             default_image=False,
             duration=57,  # 57ms
             loop=0,
             optimize=True,
+            compress_level=9,
         )
 
     def save_as_webp(self, fp: PILFileParameter, zoom: int = 1) -> None:
+        # TODO: Check if the palette is being preserved.
         images = self.get_images(zoom)
         images[0].save(
             fp,
@@ -767,7 +801,7 @@ def gfxdat_parser(rawdata: bytes) -> Image.Image:
     rawpixels = rawdata[256 * 3 :]
 
     # One byte per channel (R, G, B), 8-bit per channel.
-    palette = bytearray(round(c * 255 / 63) for c in rawpalette)
+    #palette = bytearray(round(c * 255 / 63) for c in rawpalette)
 
     # Our framebuffer where the compressed image will be uncompresed.
     pixels = bytearray(320 * 200)
@@ -791,8 +825,7 @@ def gfxdat_parser(rawdata: bytes) -> Image.Image:
             )
         )
 
-    img = Image.new(mode="P", size=(320, 200))
-    img.putpalette(palette)
-    img.putdata(pixels)
-
-    return img
+    obj = JetpackGfx()
+    obj.pixels = pixels
+    obj.palette_vga = rawpalette
+    return obj
