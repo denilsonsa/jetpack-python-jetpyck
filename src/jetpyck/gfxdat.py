@@ -152,6 +152,7 @@ import math
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import IntEnum
+from functools import reduce
 from itertools import batched
 from typing import Self
 from warnings import warn
@@ -385,6 +386,8 @@ class JetpackColorCycle:
     b'ABCDEFMNOPQRGHIJKLSTUVWX'
     >>> cycle.rotate_palette(cycle.rotate_palette(pal))
     b'ABCDEFMNOPQRGHIJKLSTUVWX'
+    >>> cycle.rotate_palette(pal, 0) == pal
+    True
     >>> cycle.rotate_palette(pal, len(cycle)) == pal
     True
     >>> cycle.rotate_palette(pal, 1 + len(cycle)) == cycle.rotate_palette(pal, 1)
@@ -476,7 +479,7 @@ class JetpackColorCycle:
             case _:
                 raise ValueError("Unsupported direction: {!r}".format(self.direction))
 
-    def rotate_palette(self, pal: bytes, step: int = 1) -> bytes:
+    def rotate_palette(self, pal: bytes | bytearray, step: int = 1) -> bytes:
         start = self.first * 3
         end = (self.last + 1) * 3
 
@@ -562,8 +565,37 @@ class JetpackGfx:
         return bytes(color_8bit_to_6bit(c) for c in self.vga_palette)
 
     def generate_color_cycle_vga_palettes(self) -> list[bytes]:
-        frames = math.lcm(*[len(cycle) for cycle in self.color_cycles])
-        ...
+        r"""Returns a list of VGA palettes after color cycling has been applied.
+
+        This can be used to generate an animated GIF.o
+
+        ---
+
+        >>> gfx = JetpackGfx()
+        >>> gfx.color_cycles = [
+        ...     JetpackColorCycle(1, 3, JetpackColorCycleDirection.Forward),
+        ...     JetpackColorCycle(4, 5, JetpackColorCycleDirection.Backward),
+        ... ]
+        >>> gfx.vga_palette = bytes(range(65, 65 + 8 * 3))
+        >>> gfx.vga_palette
+        b'ABCDEFGHIJKLMNOPQRSTUVWX'
+        >>> print('\n'.join(repr(p) for p in gfx.generate_color_cycle_vga_palettes()))
+        b'ABCDEFGHIJKLMNOPQRSTUVWX'
+        b'ABCJKLDEFGHIPQRMNOSTUVWX'
+        b'ABCGHIJKLDEFMNOPQRSTUVWX'
+        b'ABCDEFGHIJKLPQRMNOSTUVWX'
+        b'ABCJKLDEFGHIMNOPQRSTUVWX'
+        b'ABCGHIJKLDEFPQRMNOSTUVWX'
+        """
+        total_frames = math.lcm(*[cycle.n_frames for cycle in self.color_cycles])
+        return [
+            reduce(
+                lambda pal, cycle: cycle.rotate_palette(pal, i),
+                self.color_cycles,
+                bytes(self.vga_palette),
+            )
+            for i in range(total_frames)
+        ]
 
 
 def gfxdat_parser(rawdata: bytes) -> Image.Image:
