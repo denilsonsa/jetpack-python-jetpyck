@@ -328,8 +328,8 @@ def color_8bit_to_6bit(channel: int) -> int:
 class JetpackColorCycleDirection(IntEnum):
     Forward = 1
     Backward = -1
-    # Not implemented
-    # Bounce = 3
+    Bounce = 2
+    ReverseBounce = -2
 
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
@@ -356,6 +356,8 @@ class JetpackColorCycle:
     >>> cycle
     JetpackColorCycle(first=2, last=5, direction=JetpackColorCycleDirection.Forward)
     >>> len(cycle)
+    4
+    >>> cycle.n_frames
     4
     >>> cycle[1]
     3
@@ -403,6 +405,34 @@ class JetpackColorCycle:
     b'ABCDEFMNOPQRGHIJKLSTUVWX'
     >>> cycle.rotate_palette(pal, len(cycle) - 1) == (-cycle).rotate_palette(pal, 1)
     True
+
+    >>> bounce = JetpackColorCycle(2, 5, JetpackColorCycleDirection.Bounce)
+    >>> bounce
+    JetpackColorCycle(first=2, last=5, direction=JetpackColorCycleDirection.Bounce)
+    >>> len(bounce)
+    4
+    >>> bounce.n_frames
+    8
+    >>> bounce.rotate_palette(pal)
+    b'ABCDEFJKLMNOPQRGHISTUVWX'
+    >>> bounce.rotate_palette(pal, 2)
+    b'ABCDEFMNOPQRGHIJKLSTUVWX'
+    >>> bounce.rotate_palette(pal, 3)
+    b'ABCDEFPQRGHIJKLMNOSTUVWX'
+    >>> bounce.rotate_palette(pal, 4)
+    b'ABCDEFGHIJKLMNOPQRSTUVWX'
+    >>> bounce.rotate_palette(pal, 5)
+    b'ABCDEFPQRGHIJKLMNOSTUVWX'
+    >>> bounce.rotate_palette(pal, 6)
+    b'ABCDEFMNOPQRGHIJKLSTUVWX'
+    >>> bounce.rotate_palette(pal, 7)
+    b'ABCDEFJKLMNOPQRGHISTUVWX'
+    >>> bounce.rotate_palette(pal, 8)
+    b'ABCDEFGHIJKLMNOPQRSTUVWX'
+    >>> for i in range(8, 24):
+    ...     assert bounce.rotate_palette(pal, i) == bounce.rotate_palette(pal, i % bounce.n_frames), i
+    >>> for i in range(16):
+    ...     assert bounce.rotate_palette(pal, i) == (-bounce).rotate_palette(pal, bounce.n_frames - i), i
     """
 
     first: int
@@ -431,16 +461,46 @@ class JetpackColorCycle:
             self.first, self.last, direction=JetpackColorCycleDirection(-self.direction)
         )
 
+    @property
+    def n_frames(self) -> int:
+        match self.direction:
+            case (
+                JetpackColorCycleDirection.Forward | JetpackColorCycleDirection.Backward
+            ):
+                return len(self)
+            case (
+                JetpackColorCycleDirection.Bounce
+                | JetpackColorCycleDirection.ReverseBounce
+            ):
+                return 2 * len(self)
+            case _:
+                raise ValueError("Unsupported direction: {!r}".format(self.direction))
+
     def rotate_palette(self, pal: bytes, step: int = 1) -> bytes:
         start = self.first * 3
         end = (self.last + 1) * 3
 
-        if self.direction == JetpackColorCycleDirection.Forward:
-            offset = -step % len(self)
-        elif self.direction == JetpackColorCycleDirection.Backward:
-            offset = step % len(self)
-        else:
-            raise ValueError("Unsupported direction: {!r}".format(self.direction))
+        sign = {
+            JetpackColorCycleDirection.Forward: -1,
+            JetpackColorCycleDirection.Backward: +1,
+            JetpackColorCycleDirection.Bounce: +1,
+            JetpackColorCycleDirection.ReverseBounce: -1,
+        }[self.direction]
+
+        match self.direction:
+            case (
+                JetpackColorCycleDirection.Forward | JetpackColorCycleDirection.Backward
+            ):
+                offset = (sign * step) % len(self)
+            case (
+                JetpackColorCycleDirection.Bounce
+                | JetpackColorCycleDirection.ReverseBounce
+            ):
+                offset = (step) % (2 * len(self))
+                if offset >= len(self):
+                    offset = (-offset) % len(self)
+            case _:
+                raise ValueError("Unsupported direction: {!r}".format(self.direction))
 
         assert offset >= 0
         delta = offset * 3
