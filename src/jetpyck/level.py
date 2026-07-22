@@ -705,6 +705,9 @@ class JetpackLevel:
         fonts are usually taller than wider, this renders two tiles per
         character.
         """
+        # Bit 0: top half
+        # Bit 1: bottom half
+        tileset = " ▀▄█"
         is_block = (
             "                    "
             "        # ###       "
@@ -713,14 +716,6 @@ class JetpackLevel:
             "####################"
             "####################"
         )
-        tileset = {
-            # Bit 0: top half
-            # Bit 1: bottom half
-            0b00: " ",
-            0b01: "▀",
-            0b10: "▄",
-            0b11: "█",
-        }
         ret = [str(self.description, encoding="ascii")]
         prev = bytearray(self.width)
         for n, row in enumerate(self.tilemap.rows()):
@@ -743,6 +738,11 @@ class JetpackLevel:
         grid. This has been a recent addition to the Unicode standard, and many
         systems can't render it correctly.
         """
+        # Bits:
+        # 01 Top left and right
+        # 23 Middle left and right
+        # 45 Bottom left and right
+        #
         # This lookup table contains characters from these ranges:
         #
         # * SPACE [U+0020]
@@ -793,7 +793,13 @@ class JetpackLevel:
 
         See also: https://arewelegacycomputingyet.com/
         """
-        # This is a lookup table, because the list of OCTANT characters is
+        # Bits:
+        # 01 Top left and right
+        # 23 Top-middle left and right
+        # 45 Bottom-middle left and right
+        # 67 Bottom left and right
+        #
+        # This is a lookup table because the list of OCTANT characters is
         # incomplete, because some of them are redundant. For instance,
         # "OCTANT-13" doesn't exist, as it is redundant to "QUADRANT UPPER
         # LEFT". Thus, instead of having 256 continuous values that we could
