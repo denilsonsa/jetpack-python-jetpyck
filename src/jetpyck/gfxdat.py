@@ -436,20 +436,22 @@ class JetpackColorCycle:
         end = (self.last + 1) * 3
 
         if self.direction == JetpackColorCycleDirection.Forward:
-            offset = step % len(self)
-        elif self.direction == JetpackColorCycleDirection.Backward:
             offset = -step % len(self)
+        elif self.direction == JetpackColorCycleDirection.Backward:
+            offset = step % len(self)
         else:
-            raise ValueError("Unsupported direction: {!r}".format(self.direction));
+            raise ValueError("Unsupported direction: {!r}".format(self.direction))
 
-        delta_start = 0
-        delta_end = -offset * 3
+        assert offset >= 0
+        delta = offset * 3
 
         return bytes(
+            # Static prefix
             pal[:start]
-            + pal[end + delta_end : end]
-            + pal[start + delta_start : end + delta_end]
-            + pal[start : start + delta_start]
+            # Cycling this region
+            + pal[start + delta : end]
+            + pal[start : start + delta]
+            # Static suffix
             + pal[end:]
         )
 
