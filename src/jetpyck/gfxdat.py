@@ -372,18 +372,22 @@ class JetpackColorCycle:
     >>> 6 in cycle
     False
 
-    For testing purposes, let's use a small 7-color palette.
+    For testing purposes, let's use a small 8-color palette.
 
-    >>> pal = bytes(range(7 * 3))
-    >>> list(pal)
-    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-    >>> list(cycle.apply_to_palette(pal))
-    [0, 1, 2, 3, 4, 5, 15, 16, 17, 6, 7, 8, 9, 10, 11, 12, 13, 14, 18, 19, 20]
-    >>> list(cycle.apply_to_palette(pal, 2))
-    [0, 1, 2, 3, 4, 5, 12, 13, 14, 15, 16, 17, 6, 7, 8, 9, 10, 11, 18, 19, 20]
-    >>> list(cycle.apply_to_palette(cycle.apply_to_palette(pal)))
-    [0, 1, 2, 3, 4, 5, 12, 13, 14, 15, 16, 17, 6, 7, 8, 9, 10, 11, 18, 19, 20]
-    >>> cycle.apply_to_palette(pal, len(cycle)) == pal
+    >>> pal = bytes(range(65, 65 + 8 * 3))
+    >>> pal
+    b'ABCDEFGHIJKLMNOPQRSTUVWX'
+    >>> cycle.rotate_palette(pal)
+    b'ABCDEFPQRGHIJKLMNOSTUVWX'
+    >>> cycle.rotate_palette(pal, 2)
+    b'ABCDEFMNOPQRGHIJKLSTUVWX'
+    >>> cycle.rotate_palette(cycle.rotate_palette(pal))
+    b'ABCDEFMNOPQRGHIJKLSTUVWX'
+    >>> cycle.rotate_palette(pal, len(cycle)) == pal
+    True
+    >>> cycle.rotate_palette(pal, 1 + len(cycle)) == cycle.rotate_palette(pal, 1)
+    True
+    >>> cycle.rotate_palette(pal, len(cycle) - 1) == cycle.rotate_palette(pal, -1)
     True
 
     >>> -cycle
@@ -393,10 +397,12 @@ class JetpackColorCycle:
     >>> (-(-cycle)) == cycle
     True
 
-    >>> list((-cycle).apply_to_palette(pal))
-    [0, 1, 2, 3, 4, 5, 9, 10, 11, 12, 13, 14, 15, 16, 17, 6, 7, 8, 18, 19, 20]
-    >>> list((-cycle).apply_to_palette(pal, 2))
-    [0, 1, 2, 3, 4, 5, 12, 13, 14, 15, 16, 17, 6, 7, 8, 9, 10, 11, 18, 19, 20]
+    >>> (-cycle).rotate_palette(pal)
+    b'ABCDEFJKLMNOPQRGHISTUVWX'
+    >>> (-cycle).rotate_palette(pal, 2)
+    b'ABCDEFMNOPQRGHIJKLSTUVWX'
+    >>> cycle.rotate_palette(pal, len(cycle) - 1) == (-cycle).rotate_palette(pal, 1)
+    True
     """
 
     first: int
@@ -425,7 +431,7 @@ class JetpackColorCycle:
             self.first, self.last, direction=JetpackColorCycleDirection(-self.direction)
         )
 
-    def apply_to_palette(self, pal: bytes, step: int = 1) -> bytes:
+    def rotate_palette(self, pal: bytes, step: int = 1) -> bytes:
         start = self.first * 3
         end = (self.last + 1) * 3
 
