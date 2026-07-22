@@ -419,6 +419,7 @@ class JetpackColorCycle:
     direction: JetpackColorCycleDirection = JetpackColorCycleDirection.Forward
 
     def __len__(self) -> int:
+        """How many colors are contained in this color cycling range?"""
         assert self.last >= self.first
         return self.last - self.first + 1
 
@@ -446,6 +447,9 @@ class JetpackColorCycle:
 
     @property
     def n_frames(self) -> int:
+        """Returns how many frames (or steps) are needed for one entire loop of
+        this color cycling animation.
+        """
         match self.direction:
             case (
                 JetpackColorCycleDirection.Forward | JetpackColorCycleDirection.Backward
@@ -460,6 +464,15 @@ class JetpackColorCycle:
                 raise ValueError("Unsupported direction: {!r}".format(self.direction))
 
     def rotate_palette(self, pal: bytes | bytearray, step: int = 1) -> bytes:
+        """Given a palette, returns a new palette after applying the color
+        cycling.
+
+        The `step` parameter defines how many cycles of animation have to be
+        applied. `step=0` returns the palette unchanged, `step=1` returns how
+        the palette will look after one frame, and so on until
+        `step=self.n_frames-1`, which is the last frame of animation.
+        `step=self.n_frames` is equivalent to `step=0`.
+        """
         start = self.first * 3
         end = (self.last + 1) * 3
 
@@ -500,10 +513,12 @@ class JetpackColorCycle:
 
     @classmethod
     def stairs(cls) -> Self:
+        """Hard-coded color cycling range used for the stairs."""
         return cls(247, 250)
 
     @classmethod
     def belts(cls) -> Self:
+        """Hard-coded color cycling range used for the conveyor belts."""
         return cls(251, 254)
 
 
@@ -526,7 +541,7 @@ class JetpackGfx:
             JetpackColorCycle.stairs(),
             JetpackColorCycle.belts(),
         ]
-        self.vga_palette: bytes | bytearray = bytearray(256 * 3)
+        self.palette_vga: bytes | bytearray = bytearray(256 * 3)
 
     def __repr__(self) -> str:
         return "<JetpackGfx {}x{} {!r}>".format(self.width, self.height, id(self))
@@ -547,7 +562,20 @@ class JetpackGfx:
         This property converts the internal VGA-style palette into RGB8,
         returning a `bytes` object.
         """
-        return bytes(color_8bit_to_6bit(c) for c in self.vga_palette)
+        return bytes(color_8bit_to_6bit(c) for c in self.palette_vga)
+
+    @property
+    def n_frames(self) -> int:
+        """Returns how many frames (or steps) are needed for one entire loop of
+        all color cycling animations together.
+
+        In case the color cycling animations have different lengths, we want to
+        return the least common multiple of them. This ensures the whole
+        animation loops properly.
+        """
+        if len(self.color_cycles) == 0:
+            return 1
+        return math.lcm(*[cycle.n_frames for cycle in self.color_cycles])
 
     def generate_color_cycle_vga_palettes(self) -> list[bytes]:
         r"""Returns a list of VGA palettes after color cycling has been applied.
@@ -559,7 +587,7 @@ class JetpackGfx:
 
         >>> static = JetpackGfx()
         >>> static.color_cycles = []
-        >>> static.vga_palette = bytes(range(65, 65 + 8 * 3))
+        >>> static.palette_vga = bytes(range(65, 65 + 8 * 3))
         >>> static.generate_color_cycle_vga_palettes()
         [b'ABCDEFGHIJKLMNOPQRSTUVWX']
 
@@ -568,8 +596,8 @@ class JetpackGfx:
         ...     JetpackColorCycle(1, 3, JetpackColorCycleDirection.Forward),
         ...     JetpackColorCycle(4, 5, JetpackColorCycleDirection.Backward),
         ... ]
-        >>> gfx.vga_palette = bytes(range(65, 65 + 8 * 3))
-        >>> gfx.vga_palette
+        >>> gfx.palette_vga = bytes(range(65, 65 + 8 * 3))
+        >>> gfx.palette_vga
         b'ABCDEFGHIJKLMNOPQRSTUVWX'
         >>> print('\n'.join(repr(p) for p in gfx.generate_color_cycle_vga_palettes()))
         b'ABCDEFGHIJKLMNOPQRSTUVWX'
@@ -594,22 +622,20 @@ class JetpackGfx:
 
         """
         if len(self.color_cycles) == 0:
-            return [bytes(self.vga_palette)]
+            return [bytes(self.palette_vga)]
 
         # Sanity check, avoiding intersecting ranges.
         cnt = Counter(chain.from_iterable(self.color_cycles))
         if any(v > 1 for v in cnt.values()):
             raise ValueError("Color cycles must not intersect")
 
-        # In case of multiple color cycles, make sure they all loop properly.
-        total_frames = math.lcm(*[cycle.n_frames for cycle in self.color_cycles])
         return [
             reduce(
                 lambda pal, cycle: cycle.rotate_palette(pal, i),
                 self.color_cycles,
-                bytes(self.vga_palette),
+                bytes(self.palette_vga),
             )
-            for i in range(total_frames)
+            for i in range(self.n_frames)
         ]
 
     def generate_color_cycle_8bit_palettes(self) -> list[bytes]:
@@ -618,6 +644,29 @@ class JetpackGfx:
             bytes(color_8bit_to_6bit(c) for c in pal)
             for pal in self.generate_color_cycle_vga_palettes()
         ]
+
+    def get_image(self) -> Image.Image:
+        """Converts this object into a PIL.Image Image."""
+        img = Image.frombytes(
+            mode="P",
+            size=(self.width, self.height),
+            data=self.pixels,
+            decoder_name="raw",
+        )
+        img.putpalette(self.palette_8bit)
+        return img
+
+    def get_images(self) -> Iterable[Image.Image]:
+        """Converts this object into a list of PIL.Image Images, cycling their
+        palettes each frame for a full animation loop.
+        """
+        images = [self.get_image()]
+        palettes = self.generate_color_cycle_8bit_palettes()
+        for pal in palettes[1:]:
+            frame = images[0].copy()
+            frame.putpalette(pal)
+            images.append(frame)
+        return images
 
 
 class BitGenerator:
