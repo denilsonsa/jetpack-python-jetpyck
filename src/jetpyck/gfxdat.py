@@ -458,7 +458,8 @@ class JetpackColorCycle:
             raise IndexError("Index {} is out of range".format(index))
 
     def __iter__(self) -> Iterator[int]:
-        return iter(self)
+        for i in range(len(self)):
+            yield self[i]
 
     def __contains__(self, value: int) -> bool:
         return self.first <= value <= self.last
@@ -670,7 +671,7 @@ def gfxdat_parser(rawdata: bytes) -> Image.Image:
             pointer += 1
 
     if (remainder := stream.remaining_bits()) >= 8:
-        print(
+        warn(
             "Warning: {} trailing bytes ({} bits) are being ignored after the pixel data.".format(
                 remainder // 8, remainder
             )

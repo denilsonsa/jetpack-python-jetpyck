@@ -421,7 +421,7 @@ class JetpackLevelTilemap:
         return self.width * self.height
 
     def __iter__(self) -> Iterator[int]:
-        return iter(self)
+        return iter(self.data)
 
     @overload
     def _subscript_to_index(self, subscript: int | tuple[int, int]) -> int: ...
@@ -746,8 +746,8 @@ class JetpackLevelPack:
     def __len__(self) -> int:
         return len(self.levels)
 
-    def __iter__(self) -> Iterator[int]:
-        return iter(self)
+    def __iter__(self) -> Iterator[JetpackLevel]:
+        return iter(self.levels)
 
     @overload
     def __getitem__(self, index_or_slice: int) -> JetpackLevel: ...
