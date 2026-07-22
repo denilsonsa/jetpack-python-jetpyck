@@ -429,13 +429,15 @@ class JetpackColorCycle:
         start = self.first * 3
         end = (self.last + 1) * 3
 
-        step = step % len(self)
         if self.direction == JetpackColorCycleDirection.Forward:
-            delta_start = 0
-            delta_end = -3 * step
+            offset = step % len(self)
         elif self.direction == JetpackColorCycleDirection.Backward:
-            delta_start = 3 * step
-            delta_end = 0
+            offset = -step % len(self)
+        else:
+            raise ValueError("Unsupported direction: {!r}".format(self.direction));
+
+        delta_start = 0
+        delta_end = -offset * 3
 
         return bytes(
             pal[:start]
