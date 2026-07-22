@@ -207,39 +207,6 @@ def jswitch_name_encode(name: str) -> bytes:
     return bytes(b ^ 52 for b in name.encode("ascii"))
 
 
-class BitGenerator:
-    def __init__(self, data: bytes):
-        self.data = data
-        self.pointer = 0
-        self.buffer: list[int] = []
-
-    def remaining_bits(self) -> int:
-        return len(self.buffer) + len(self.data) - self.pointer
-
-    def is_empty(self) -> bool:
-        return self.pointer >= len(self.data) and len(self.buffer) == 0
-
-    def consume_byte(self) -> int:
-        out = self.data[self.pointer]
-        self.pointer += 1
-        return out
-
-    def get_bit(self) -> int:
-        if len(self.buffer) == 0:
-            self.buffer.extend(int(bit) for bit in "{:08b}".format(self.consume_byte()))
-        return self.buffer.pop(0)
-
-    def get_bits(self, how_many: int) -> int:
-        out = 0
-        for i in range(how_many):
-            out <<= 1
-            out |= self.get_bit()
-        return out
-
-    def get_byte(self) -> int:
-        return self.get_bits(8)
-
-
 def color_6bit_to_8bit(channel: int) -> int:
     """Given a 6-bit value (from VGA), convert to an 8-bit value (for RGB8).
 
@@ -349,10 +316,18 @@ class JetpackColorCycle:
     Observe how the limits of the color cycle are inclusive, which is different
     from Python's range() behavior (where the second limit is exclusive).
 
+    ---
+
+    Color cycling ranges hard-coded into the game:
+
     >>> JetpackColorCycle.stairs()
     JetpackColorCycle(first=247, last=250, direction=JetpackColorCycleDirection.Forward)
     >>> JetpackColorCycle.belts()
     JetpackColorCycle(first=251, last=254, direction=JetpackColorCycleDirection.Forward)
+
+    It's possible to create custom color cycling ranges, but these cannot be
+    used in the game. Still, they are useful for testing and for demonstrating
+    how this class works.
 
     >>> cycle = JetpackColorCycle(2, 5)
     >>> cycle
@@ -546,12 +521,12 @@ class JetpackGfx:
     ):
         self.width = width
         self.height = height
-        self.pixels = bytearray(self.width * self.height)
+        self.pixels: bytes | bytearray = bytearray(self.width * self.height)
         self.color_cycles = [
             JetpackColorCycle.stairs(),
             JetpackColorCycle.belts(),
         ]
-        self.vga_palette = bytearray(256 * 3)
+        self.vga_palette: bytes | bytearray = bytearray(256 * 3)
 
     def __repr__(self) -> str:
         return "<JetpackGfx {}x{} {!r}>".format(self.width, self.height, id(self))
@@ -643,6 +618,39 @@ class JetpackGfx:
             bytes(color_8bit_to_6bit(c) for c in pal)
             for pal in self.generate_color_cycle_vga_palettes()
         ]
+
+
+class BitGenerator:
+    def __init__(self, data: bytes):
+        self.data = data
+        self.pointer = 0
+        self.buffer: list[int] = []
+
+    def remaining_bits(self) -> int:
+        return len(self.buffer) + len(self.data) - self.pointer
+
+    def is_empty(self) -> bool:
+        return self.pointer >= len(self.data) and len(self.buffer) == 0
+
+    def consume_byte(self) -> int:
+        out = self.data[self.pointer]
+        self.pointer += 1
+        return out
+
+    def get_bit(self) -> int:
+        if len(self.buffer) == 0:
+            self.buffer.extend(int(bit) for bit in "{:08b}".format(self.consume_byte()))
+        return self.buffer.pop(0)
+
+    def get_bits(self, how_many: int) -> int:
+        out = 0
+        for i in range(how_many):
+            out <<= 1
+            out |= self.get_bit()
+        return out
+
+    def get_byte(self) -> int:
+        return self.get_bits(8)
 
 
 def gfxdat_parser(rawdata: bytes) -> Image.Image:
