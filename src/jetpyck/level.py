@@ -93,7 +93,7 @@ class JetpackEnemyKind(IntEnum):
     UNKNOWN2 = 0x19
 
 
-@dataclass
+@dataclass(order=True)
 class JetpackEnemy:
     r"""A single enemy instance in a level.
 
@@ -336,7 +336,7 @@ class JetpackLevelTilemap:
     The tile data can be passed during initialization.
 
     >>> import random
-    >>> JetpackLevelTilemap(random.randrange(120) for i in range(26 * 16))  # doctest: +ELLIPSIS
+    >>> JetpackLevelTilemap(random.randrange(40, 120) for i in range(26 * 16))  # doctest: +ELLIPSIS
     JetpackLevelTilemap(b'...')
     >>> JetpackLevelTilemap([0, 1, 2, 3], width=2, height=2)
     JetpackLevelTilemap(b'\x00\x01\x02\x03', width=2, height=2)
@@ -365,9 +365,15 @@ class JetpackLevelTilemap:
     # - array (mutable array of 8-bit integers or other word sizes)
     # I had to pick one, but any of these would have worked.
     data: bytearray = field(init=False)
+
+    # The internal data structure is a bytearray, but the __init__ parameter is
+    # an Iterable[int]. This "tiledata" parameter is converted to the internal
+    # format in __post_init__.
     tiledata: InitVar[Optional[Iterable[int]]] = None
 
+    # The other __init__ parameters are keyword-only.
     _: KW_ONLY
+
     # The original Jetpack levels are hard-coded to 26x16 tiles.
     default_width: ClassVar[int] = 26
     default_height: ClassVar[int] = 16

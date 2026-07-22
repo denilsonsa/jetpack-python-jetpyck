@@ -305,7 +305,7 @@ class JetpackColorCycleDirection(IntEnum):
         return f"{cls_name}.{self.name}"
 
 
-@dataclass
+@dataclass(order=True)
 class JetpackColorCycle:
     """A color cycle is defined by:
 
@@ -318,12 +318,19 @@ class JetpackColorCycle:
 
     ---
 
-    Color cycling ranges hard-coded into the game:
+    These color cycling ranges are hard-coded into the game:
 
     >>> JetpackColorCycle.stairs()
     JetpackColorCycle(first=247, last=250, direction=JetpackColorCycleDirection.Forward)
     >>> JetpackColorCycle.belts()
     JetpackColorCycle(first=251, last=254, direction=JetpackColorCycleDirection.Forward)
+
+    These objects are sortable.
+
+    >>> JetpackColorCycle.stairs() < JetpackColorCycle.belts()
+    True
+    >>> JetpackColorCycle.stairs() > JetpackColorCycle.belts()
+    False
 
     It's possible to create custom color cycling ranges, but these cannot be
     used in the game. Still, they are useful for testing and for demonstrating
