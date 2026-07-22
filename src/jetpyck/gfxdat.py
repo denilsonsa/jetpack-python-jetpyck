@@ -149,12 +149,13 @@ There are three color ranges that get animated:
 """
 
 import math
+from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import IntEnum
 from functools import reduce
-from itertools import batched
-from typing import Self
+from itertools import batched, chain
+from typing import Iterator, Optional, Self
 from warnings import warn
 
 # Please install `pillow`, it's the most popular library for working with
@@ -456,6 +457,9 @@ class JetpackColorCycle:
         else:
             raise IndexError("Index {} is out of range".format(index))
 
+    def __iter__(self) -> Iterator[int]:
+        return iter(self)
+
     def __contains__(self, value: int) -> bool:
         return self.first <= value <= self.last
 
@@ -533,15 +537,20 @@ class JetpackGfx:
     default_width = 320
     default_height = 200
 
-    color_cycles: list[JetpackColorCycle] = field(
-        default_factory=lambda: [JetpackColorCycle.stairs(), JetpackColorCycle.belts()]
-    )
-
-    def __init__(self, *, width: int = default_width, height: int = default_height):
+    def __init__(
+        self,
+        *,
+        width: int = default_width,
+        height: int = default_height,
+    ):
         self.width = width
         self.height = height
-        self.vga_palette = bytearray(256 * 3)
         self.pixels = bytearray(self.width * self.height)
+        self.color_cycles = [
+            JetpackColorCycle.stairs(),
+            JetpackColorCycle.belts(),
+        ]
+        self.vga_palette = bytearray(256 * 3)
 
     def __repr__(self) -> str:
         return "<JetpackGfx {}x{} {!r}>".format(self.width, self.height, id(self))
@@ -567,9 +576,16 @@ class JetpackGfx:
     def generate_color_cycle_vga_palettes(self) -> list[bytes]:
         r"""Returns a list of VGA palettes after color cycling has been applied.
 
-        This can be used to generate an animated GIF.o
+        This method can be used to generate the palettes required to convert
+        the static image into an animated GIF.
 
         ---
+
+        >>> static = JetpackGfx()
+        >>> static.color_cycles = []
+        >>> static.vga_palette = bytes(range(65, 65 + 8 * 3))
+        >>> static.generate_color_cycle_vga_palettes()
+        [b'ABCDEFGHIJKLMNOPQRSTUVWX']
 
         >>> gfx = JetpackGfx()
         >>> gfx.color_cycles = [
@@ -586,7 +602,30 @@ class JetpackGfx:
         b'ABCDEFGHIJKLPQRMNOSTUVWX'
         b'ABCJKLDEFGHIMNOPQRSTUVWX'
         b'ABCGHIJKLDEFPQRMNOSTUVWX'
+
+        The color cycling ranges must not intersect. If they do, the colors
+        will end up in unexpected places.
+
+        >>> bad = JetpackGfx()
+        >>> bad.color_cycles = [
+        ...     JetpackColorCycle(1, 4, JetpackColorCycleDirection.Forward),
+        ...     JetpackColorCycle(4, 5, JetpackColorCycleDirection.Backward),
+        ... ]
+        >>> bad.generate_color_cycle_vga_palettes()
+        Traceback (most recent call last):
+        ...
+        ValueError: Color cycles must not intersect
+
         """
+        if len(self.color_cycles) == 0:
+            return [bytes(self.vga_palette)]
+
+        # Sanity check, avoiding intersecting ranges.
+        cnt = Counter(chain.from_iterable(self.color_cycles))
+        if any(v > 1 for v in cnt.values()):
+            raise ValueError("Color cycles must not intersect")
+
+        # In case of multiple color cycles, make sure they all loop properly.
         total_frames = math.lcm(*[cycle.n_frames for cycle in self.color_cycles])
         return [
             reduce(
@@ -595,6 +634,13 @@ class JetpackGfx:
                 bytes(self.vga_palette),
             )
             for i in range(total_frames)
+        ]
+
+    def generate_color_cycle_8bit_palettes(self) -> list[bytes]:
+        """Returns a list of RGB8 palettes after color cycling has been applied."""
+        return [
+            bytes(color_8bit_to_6bit(c) for c in pal)
+            for pal in self.generate_color_cycle_vga_palettes()
         ]
 
 

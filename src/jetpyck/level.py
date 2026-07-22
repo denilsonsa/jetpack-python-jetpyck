@@ -55,7 +55,7 @@ from enum import IntEnum
 from pathlib import Path
 from warnings import warn
 
-from typing import BinaryIO, ClassVar, Optional, Self, overload
+from typing import BinaryIO, ClassVar, Iterator, Optional, Self, overload
 
 from .utils import unpack_int, unpack_ints, unpack_bytes
 
@@ -420,6 +420,9 @@ class JetpackLevelTilemap:
     def __len__(self) -> int:
         return self.width * self.height
 
+    def __iter__(self) -> Iterator[int]:
+        return iter(self)
+
     @overload
     def _subscript_to_index(self, subscript: int | tuple[int, int]) -> int: ...
 
@@ -742,6 +745,9 @@ class JetpackLevelPack:
 
     def __len__(self) -> int:
         return len(self.levels)
+
+    def __iter__(self) -> Iterator[int]:
+        return iter(self)
 
     @overload
     def __getitem__(self, index_or_slice: int) -> JetpackLevel: ...
