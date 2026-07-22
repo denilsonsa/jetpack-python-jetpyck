@@ -155,12 +155,15 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from functools import reduce
 from itertools import batched, chain
-from typing import Iterator, Optional, Self
+from typing import IO, Iterator, Optional, Self
 from warnings import warn
 
 # Please install `pillow`, it's the most popular library for working with
 # images in Python.
 from PIL import Image
+from PIL._typing import StrOrBytesPath
+
+PILFileParameter = StrOrBytesPath | IO[bytes]
 
 __all__ = [
     # Not including this in the default "*" import.
@@ -172,6 +175,7 @@ __all__ = [
     # If anyone wants, just import them explicitly.
     # "jswitch_name_decode",
     # "jswitch_name_encode",
+    # TODO: Add stuff here.
 ]
 
 
@@ -480,9 +484,6 @@ class JetpackColorCycle:
         `step=self.n_frames-1`, which is the last frame of animation.
         `step=self.n_frames` is equivalent to `step=0`.
         """
-        start = self.first * 3
-        end = (self.last + 1) * 3
-
         sign = {
             JetpackColorCycleDirection.Forward: -1,
             JetpackColorCycleDirection.Backward: +1,
@@ -501,12 +502,16 @@ class JetpackColorCycle:
             ):
                 offset = (step) % (2 * len(self))
                 if offset >= len(self):
+                    # Reversing the sign for the second half of the bounce
+                    # color cycling animation.
                     offset = (-offset) % len(self)
             case _:
                 raise ValueError("Unsupported direction: {!r}".format(self.direction))
 
-        assert offset >= 0
+        assert 0 <= offset < len(self)
         delta = offset * 3
+        start = self.first * 3
+        end = (self.last + 1) * 3
 
         return bytes(
             # Static prefix
@@ -652,8 +657,11 @@ class JetpackGfx:
             for pal in self.generate_color_cycle_vga_palettes()
         ]
 
-    def get_image(self) -> Image.Image:
+    def get_image(self, zoom: int = 1) -> Image.Image:
         """Converts this object into a PIL.Image Image."""
+        if zoom < 1:
+            raise ValueError("Zoom must be a positive integer")
+
         img = Image.frombytes(
             mode="P",
             size=(self.width, self.height),
@@ -661,19 +669,61 @@ class JetpackGfx:
             decoder_name="raw",
         )
         img.putpalette(self.palette_8bit)
+
+        if zoom > 1:
+            img = img.resize(
+                (img.width * zoom, img.height * zoom), resample=Image.Resampling.NEAREST
+            )
         return img
 
-    def get_images(self) -> Iterable[Image.Image]:
+    def get_images(self, zoom: int = 1) -> list[Image.Image]:
         """Converts this object into a list of PIL.Image Images, cycling their
         palettes each frame for a full animation loop.
         """
-        images = [self.get_image()]
+        images = [self.get_image(zoom)]
         palettes = self.generate_color_cycle_8bit_palettes()
         for pal in palettes[1:]:
             frame = images[0].copy()
             frame.putpalette(pal)
             images.append(frame)
+
         return images
+
+    def save_as_gif(self, fp: PILFileParameter, zoom: int = 1) -> None:
+        images = self.get_images(zoom)
+        images[0].save(
+            fp,
+            format="gif",
+            append_images=images[1:],
+            duration=57,  # 57ms
+            loop=0,
+            optimize=True,
+        )
+
+    def save_as_apng(self, fp: PILFileParameter, zoom: int = 1) -> None:
+        images = self.get_images(zoom)
+        images[0].save(
+            fp,
+            format="png",
+            append_images=images[1:],
+            default_image=False,
+            duration=57,  # 57ms
+            loop=0,
+            optimize=True,
+        )
+
+    def save_as_webp(self, fp: PILFileParameter, zoom: int = 1) -> None:
+        images = self.get_images(zoom)
+        images[0].save(
+            fp,
+            format="webp",
+            append_images=images[1:],
+            duration=57,  # 57ms
+            loop=0,
+            lossless=True,
+            method=6,  # 0=fast, 6=slower
+            minimize_size=True,
+        )
 
 
 class BitGenerator:
