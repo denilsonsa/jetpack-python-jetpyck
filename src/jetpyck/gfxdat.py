@@ -158,9 +158,10 @@ Example of decoding the names from graphics modules:
 True
 """
 
+import math
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import IntEnum
 from itertools import batched
 from typing import Self
 from warnings import warn
@@ -315,10 +316,11 @@ def color_8bit_to_6bit(channel: int) -> int:
         )
 
 
-class JetpackColorCycleDirection(Enum):
+class JetpackColorCycleDirection(IntEnum):
     Forward = 1
-    Backward = 2
-    Bounce = 3
+    Backward = -1
+    # Not implemented
+    # Bounce = 3
 
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
@@ -340,15 +342,52 @@ class JetpackColorCycle:
     JetpackColorCycle(first=247, last=250, direction=JetpackColorCycleDirection.Forward)
     >>> JetpackColorCycle.belts()
     JetpackColorCycle(first=251, last=254, direction=JetpackColorCycleDirection.Forward)
-    >>> cycle = JetpackColorCycle(120, 127)
+
+    >>> cycle = JetpackColorCycle(2, 5)
+    >>> cycle
+    JetpackColorCycle(first=2, last=5, direction=JetpackColorCycleDirection.Forward)
     >>> len(cycle)
-    8
-    >>> cycle[2]
-    122
+    4
+    >>> cycle[1]
+    3
     >>> cycle[-1]
-    127
-    >>> 125 in cycle
+    5
+    >>> 1 in cycle
+    False
+    >>> 2 in cycle
     True
+    >>> 3 in cycle
+    True
+    >>> 5 in cycle
+    True
+    >>> 6 in cycle
+    False
+
+    For testing purposes, let's use a small 7-color palette.
+
+    >>> pal = bytearray(range(7 * 3))
+    >>> list(pal)
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    >>> cycle.apply_to_palette(pal)
+    >>> list(pal)
+    [0, 1, 2, 3, 4, 5, 15, 16, 17, 6, 7, 8, 9, 10, 11, 12, 13, 14, 18, 19, 20]
+    >>> cycle.apply_to_palette(pal)
+    >>> list(pal)
+    [0, 1, 2, 3, 4, 5, 12, 13, 14, 15, 16, 17, 6, 7, 8, 9, 10, 11, 18, 19, 20]
+
+    >>> -cycle
+    JetpackColorCycle(first=2, last=5, direction=JetpackColorCycleDirection.Backward)
+    >>> (-(-cycle))
+    JetpackColorCycle(first=2, last=5, direction=JetpackColorCycleDirection.Forward)
+    >>> (-(-cycle)) == cycle
+    True
+
+    >>> (-cycle).apply_to_palette(pal)
+    >>> list(pal)
+    [0, 1, 2, 3, 4, 5, 15, 16, 17, 6, 7, 8, 9, 10, 11, 12, 13, 14, 18, 19, 20]
+    >>> (-cycle).apply_to_palette(pal)
+    >>> list(pal)
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
     """
 
     first: int
@@ -371,6 +410,28 @@ class JetpackColorCycle:
 
     def __contains__(self, value: int) -> bool:
         return self.first <= value <= self.last
+
+    def __neg__(self) -> Self:
+        return self.__class__(
+            self.first, self.last, direction=JetpackColorCycleDirection(-self.direction)
+        )
+
+    def apply_to_palette(self, pal: bytearray) -> None:
+        start = self.first * 3
+        end = (self.last + 1) * 3
+
+        if self.direction == JetpackColorCycleDirection.Forward:
+            delta_start = 0
+            delta_end = -3
+        elif self.direction == JetpackColorCycleDirection.Backward:
+            delta_start = 3
+            delta_end = 0
+
+        pal[start:end] = (
+            pal[end + delta_end : end]
+            + pal[start + delta_start : end + delta_end]
+            + pal[start : start + delta_start]
+        )
 
     @classmethod
     def stairs(cls) -> Self:
@@ -417,6 +478,10 @@ class JetpackGfx:
         returning a `bytes` object.
         """
         return bytes(color_8bit_to_6bit(c) for c in self.vga_palette)
+
+    def generate_color_cycle_vga_palettes(self) -> list[bytes]:
+        frames = math.lcm(*[len(cycle) for cycle in self.color_cycles])
+        ...
 
 
 def gfxdat_parser(rawdata: bytes) -> Image.Image:
