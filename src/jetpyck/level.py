@@ -677,6 +677,247 @@ class JetpackLevel:
             ]
         )
 
+    def as_printable_text(self) -> str:
+        """Returns a textual representation of the level.
+
+        This could be named an ASCII Art rendering of the level, but it is
+        using Unicode characters beyond the ASCII charset.
+        """
+        tileset = (
+            " ‡†⸸●◌___◦•◦•◦•′″░░◎"
+            "▴▴▴▲.  ♜█ ▒▒▓...▔▕▁▏"
+            "▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒"
+            "▓▓▓▓▓▓▓▓▓▓╳╳██▥▤▥▤▥▤"
+            "▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▒▒▓"
+            "▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▒▒▓"
+        )
+        return "\n".join(
+            [
+                str(self.description, encoding="ascii"),
+                *("".join(tileset[t] for t in row) for row in self.tilemap.rows()),
+            ]
+        )
+
+    def as_printable_half_blocks(self) -> str:
+        """Returns a textual representation of the level.
+
+        The level is rendered using "Block Elements" Unicode characters. Since
+        fonts are usually taller than wider, this renders two tiles per
+        character.
+        """
+        is_block = (
+            "                    "
+            "        # ###       "
+            "####################"
+            "####################"
+            "####################"
+            "####################"
+        )
+        tileset = {
+            # Bit 0: top half
+            # Bit 1: bottom half
+            0b00: " ",
+            0b01: "▀",
+            0b10: "▄",
+            0b11: "█",
+        }
+        ret = [str(self.description, encoding="ascii")]
+        prev = bytearray(self.width)
+        for n, row in enumerate(self.tilemap.rows()):
+            bit = n % 2
+            for x, tile in enumerate(row):
+                if is_block[tile] != " ":
+                    prev[x] |= 1 << bit
+            if bit == 1 or n == self.tilemap.height - 1:
+                ret.append("".join(tileset[c] for c in prev))
+                for x in range(len(prev)):
+                    prev[x] = 0
+
+        return "\n".join(ret)
+
+    def as_printable_sextant_blocks(self) -> str:
+        """Returns a textual representation of the level.
+
+        The level is rendered using "Symbols for Legacy Computing" Unicode
+        characters. Each of these mosaic terminal graphic characters have a 2x3
+        grid. This has been a recent addition to the Unicode standard, and many
+        systems can't render it correctly.
+        """
+        # This lookup table contains characters from these ranges:
+        #
+        # * SPACE [U+0020]
+        # * FULL BLOCK [U+2588]
+        # * 2 HALF BLOCK [U+258C..U+2590]
+        # * 60 BLOCK SEXTANT [U+1FB00..U+1FB3B]
+        tileset = (
+            " 🬀🬁🬂🬃🬄🬅🬆"
+            "🬇🬈🬉🬊🬋🬌🬍🬎"
+            "🬏🬐🬑🬒🬓▌🬔🬕"
+            "🬖🬗🬘🬙🬚🬛🬜🬝"
+            "🬞🬟🬠🬡🬢🬣🬤🬥"
+            "🬦🬧▐🬨🬩🬪🬫🬬"
+            "🬭🬮🬯🬰🬱🬲🬳🬴"
+            "🬵🬶🬷🬸🬹🬺🬻█"
+        )
+        is_block = (
+            "                    "
+            "        # ###       "
+            "####################"
+            "####################"
+            "####################"
+            "####################"
+        )
+        ret = [
+            str(line, encoding="ascii")
+            for line in [self.description[:13], self.description[13:]]
+        ]
+        prev = bytearray(self.width // 2)
+        for n, row in enumerate(self.tilemap.rows()):
+            for x, tile in enumerate(row):
+                bit = (n % 3) * 2 + (x % 2)
+                if is_block[tile] != " ":
+                    prev[x // 2] |= 1 << bit
+            if (n % 3) == 2 or n == self.tilemap.height - 1:
+                ret.append("".join(tileset[c] for c in prev))
+                for x in range(len(prev)):
+                    prev[x] = 0
+        return "\n".join(ret)
+
+    def as_printable_octant_blocks(self) -> str:
+        """Returns a textual representation of the level.
+
+        The level is rendered using "Symbols for Legacy Computing Supplement"
+        Unicode characters. Each of these mosaic terminal graphic characters
+        have a 2x4 grid. This has been a recent addition to the Unicode
+        standard, and many systems can't render it correctly.
+
+        See also: https://arewelegacycomputingyet.com/
+        """
+        # This is a lookup table, because the list of OCTANT characters is
+        # incomplete, because some of them are redundant. For instance,
+        # "OCTANT-13" doesn't exist, as it is redundant to "QUADRANT UPPER
+        # LEFT". Thus, instead of having 256 continuous values that we could
+        # easily map using bit manipulation, Unicode decided we must use a
+        # lookup table.
+        #
+        # This lookup table contains characters from these ranges:
+        #
+        # * SPACE [U+0020]
+        # * FULL BLOCK [U+2588]
+        # * 4 HALF BLOCK [U+2580..U+2590]
+        # * 2 LOWER (ONE|THREE) QUARTER BLOCK [U+2582..U+2586]
+        # * 2 UPPER (ONE|THREE) QUARTERS BLOCK [U+1FB82..U+1FB85]
+        # * 10 QUADRANT [U+2596..U+259F]
+        # * 4 (LEFT|RIGHT) HALF (UPPER|LOWER) ONE QUARTER BLOCK [U+1CEA0..U+1CEAB]
+        # * 2 MIDDLE (LEFT|RIGHT) ONE QUARTER BLOCK [U+1FBE6..U+1FBE7]
+        # * 230 OCTANT [U+1CD00..U+1CDE5]
+        tileset = (
+            " 𜺨𜺫🮂𜴀▘𜴁𜴂𜴃𜴄▝𜴅𜴆𜴇𜴈▀"
+            "𜴉𜴊𜴋𜴌🯦𜴍𜴎𜴏𜴐𜴑𜴒𜴓𜴔𜴕𜴖𜴗"
+            "𜴘𜴙𜴚𜴛𜴜𜴝𜴞𜴟🯧𜴠𜴡𜴢𜴣𜴤𜴥𜴦"
+            "𜴧𜴨𜴩𜴪𜴫𜴬𜴭𜴮𜴯𜴰𜴱𜴲𜴳𜴴𜴵🮅"
+            "𜺣𜴶𜴷𜴸𜴹𜴺𜴻𜴼𜴽𜴾𜴿𜵀𜵁𜵂𜵃𜵄"
+            "▖𜵅𜵆𜵇𜵈▌𜵉𜵊𜵋𜵌▞𜵍𜵎𜵏𜵐▛"
+            "𜵑𜵒𜵓𜵔𜵕𜵖𜵗𜵘𜵙𜵚𜵛𜵜𜵝𜵞𜵟𜵠"
+            "𜵡𜵢𜵣𜵤𜵥𜵦𜵧𜵨𜵩𜵪𜵫𜵬𜵭𜵮𜵯𜵰"
+            "𜺠𜵱𜵲𜵳𜵴𜵵𜵶𜵷𜵸𜵹𜵺𜵻𜵼𜵽𜵾𜵿"
+            "𜶀𜶁𜶂𜶃𜶄𜶅𜶆𜶇𜶈𜶉𜶊𜶋𜶌𜶍𜶎𜶏"
+            "▗𜶐𜶑𜶒𜶓▚𜶔𜶕𜶖𜶗▐𜶘𜶙𜶚𜶛▜"
+            "𜶜𜶝𜶞𜶟𜶠𜶡𜶢𜶣𜶤𜶥𜶦𜶧𜶨𜶩𜶪𜶫"
+            "▂𜶬𜶭𜶮𜶯𜶰𜶱𜶲𜶳𜶴𜶵𜶶𜶷𜶸𜶹𜶺"
+            "𜶻𜶼𜶽𜶾𜶿𜷀𜷁𜷂𜷃𜷄𜷅𜷆𜷇𜷈𜷉𜷊"
+            "𜷋𜷌𜷍𜷎𜷏𜷐𜷑𜷒𜷓𜷔𜷕𜷖𜷗𜷘𜷙𜷚"
+            "▄𜷛𜷜𜷝𜷞▙𜷟𜷠𜷡𜷢▟𜷣▆𜷤𜷥█"
+        )
+        is_block = (
+            "                    "
+            "        # ###       "
+            "####################"
+            "####################"
+            "####################"
+            "####################"
+        )
+        ret = [
+            str(line, encoding="ascii")
+            for line in [self.description[:13], self.description[13:]]
+        ]
+        prev = bytearray(self.width // 2)
+        for n, row in enumerate(self.tilemap.rows()):
+            for x, tile in enumerate(row):
+                bit = (n % 4) * 2 + (x % 2)
+                if is_block[tile] != " ":
+                    prev[x // 2] |= 1 << bit
+            if (n % 4) == 3 or n == self.tilemap.height - 1:
+                ret.append("".join(tileset[c] for c in prev))
+                for x in range(len(prev)):
+                    prev[x] = 0
+        return "\n".join(ret)
+
+    def as_printable_braille(self) -> str:
+        """Returns a textual representation of the level.
+
+        The level is rendered using "Braille Patterns" from Unicode. These are
+        rendered as tiny dots in a 2x4 grid, per character, resulting in a very
+        compact level render.
+        """
+
+        def to_braille(dots: int) -> str:
+            # Input dots:
+            # 01 Bits 0 and 1: top left and top right
+            # 23 Bits 2 and 3: second row
+            # 45 Bits 4 and 5: third row
+            # 67 Bits 6 and 7: bottom row
+            #
+            # Braille:
+            # 03
+            # 14
+            # 25
+            # 67
+            b0 = 1 if dots & (1 << 0) else 0
+            b1 = 1 if dots & (1 << 2) else 0
+            b2 = 1 if dots & (1 << 4) else 0
+            b3 = 1 if dots & (1 << 1) else 0
+            b4 = 1 if dots & (1 << 3) else 0
+            b5 = 1 if dots & (1 << 5) else 0
+            b6 = 1 if dots & (1 << 6) else 0
+            b7 = 1 if dots & (1 << 7) else 0
+            return chr(
+                0x2800
+                | (b0 << 0)
+                | (b1 << 1)
+                | (b2 << 2)
+                | (b3 << 3)
+                | (b4 << 4)
+                | (b5 << 5)
+                | (b6 << 6)
+                | (b7 << 7)
+            )
+
+        is_block = (
+            "                    "
+            "        # ###       "
+            "####################"
+            "####################"
+            "####################"
+            "####################"
+        )
+        ret = [
+            str(line, encoding="ascii")
+            for line in [self.description[:13], self.description[13:]]
+        ]
+        prev = bytearray(self.width // 2)
+        for n, row in enumerate(self.tilemap.rows()):
+            for x, tile in enumerate(row):
+                bit = (n % 4) * 2 + (x % 2)
+                if is_block[tile] != " ":
+                    prev[x // 2] |= 1 << bit
+            if (n % 4) == 3 or n == self.tilemap.height - 1:
+                ret.append("".join(to_braille(c) for c in prev))
+                for x in range(len(prev)):
+                    prev[x] = 0
+
+        return "\n".join(ret)
+
 
 @dataclass
 class JetpackLevelPack:
