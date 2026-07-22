@@ -1,4 +1,4 @@
-r"""jetpyck.gfxdat is a module for handling Jetpack `*.DAT` files containing
+"""jetpyck.gfxdat is a module for handling Jetpack `*.DAT` files containing
 graphic assets.
 
 Both the shareware version and the full version have the exact same graphic
@@ -146,16 +146,6 @@ There are three color ranges that get animated:
     * red → gradient → white
     * used for the high scores screen
 
----
-
-Example of decoding the names from graphics modules:
-
->>> # binname = Path('_JETP_A.DAT').read_bytes()
->>> binname = b'fQSAXUF\x14~Q@DUW_'
->>> jswitch_name_decode(binname)
-'Regular Jetpack'
->>> binname == jswitch_name_encode(jswitch_name_decode(binname))
-True
 """
 
 import math
@@ -189,10 +179,29 @@ __all__ = [
 
 
 def jswitch_name_decode(data: Iterable[int]) -> str:
+    r"""Decodes a name from JSWITCH.EXE graphics module format.
+
+    These are the small files named `_JETP_?.DAT`.
+
+    ---
+
+    Example of decoding the names from graphics modules:
+
+    >>> # binname = Path('_JETP_A.DAT').read_bytes()
+    >>> binname = b'fQSAXUF\x14~Q@DUW_'
+    >>> jswitch_name_decode(binname)
+    'Regular Jetpack'
+    >>> binname == jswitch_name_encode(jswitch_name_decode(binname))
+    True
+    """
     return bytes(b ^ 52 for b in data).decode("ascii")
 
 
 def jswitch_name_encode(name: str) -> bytes:
+    r"""Encodes a name to JSWITCH.EXE graphics module format.
+
+    These are the small files named `_JETP_?.DAT`.
+    """
     return bytes(b ^ 52 for b in name.encode("ascii"))
 
 
@@ -365,15 +374,17 @@ class JetpackColorCycle:
 
     For testing purposes, let's use a small 7-color palette.
 
-    >>> pal = bytearray(range(7 * 3))
+    >>> pal = bytes(range(7 * 3))
     >>> list(pal)
     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-    >>> cycle.apply_to_palette(pal)
-    >>> list(pal)
+    >>> list(cycle.apply_to_palette(pal))
     [0, 1, 2, 3, 4, 5, 15, 16, 17, 6, 7, 8, 9, 10, 11, 12, 13, 14, 18, 19, 20]
-    >>> cycle.apply_to_palette(pal)
-    >>> list(pal)
+    >>> list(cycle.apply_to_palette(pal, 2))
     [0, 1, 2, 3, 4, 5, 12, 13, 14, 15, 16, 17, 6, 7, 8, 9, 10, 11, 18, 19, 20]
+    >>> list(cycle.apply_to_palette(cycle.apply_to_palette(pal)))
+    [0, 1, 2, 3, 4, 5, 12, 13, 14, 15, 16, 17, 6, 7, 8, 9, 10, 11, 18, 19, 20]
+    >>> cycle.apply_to_palette(pal, len(cycle)) == pal
+    True
 
     >>> -cycle
     JetpackColorCycle(first=2, last=5, direction=JetpackColorCycleDirection.Backward)
@@ -382,12 +393,10 @@ class JetpackColorCycle:
     >>> (-(-cycle)) == cycle
     True
 
-    >>> (-cycle).apply_to_palette(pal)
-    >>> list(pal)
-    [0, 1, 2, 3, 4, 5, 15, 16, 17, 6, 7, 8, 9, 10, 11, 12, 13, 14, 18, 19, 20]
-    >>> (-cycle).apply_to_palette(pal)
-    >>> list(pal)
-    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    >>> list((-cycle).apply_to_palette(pal))
+    [0, 1, 2, 3, 4, 5, 9, 10, 11, 12, 13, 14, 15, 16, 17, 6, 7, 8, 18, 19, 20]
+    >>> list((-cycle).apply_to_palette(pal, 2))
+    [0, 1, 2, 3, 4, 5, 12, 13, 14, 15, 16, 17, 6, 7, 8, 9, 10, 11, 18, 19, 20]
     """
 
     first: int
@@ -416,21 +425,24 @@ class JetpackColorCycle:
             self.first, self.last, direction=JetpackColorCycleDirection(-self.direction)
         )
 
-    def apply_to_palette(self, pal: bytearray) -> None:
+    def apply_to_palette(self, pal: bytes, step: int = 1) -> bytes:
         start = self.first * 3
         end = (self.last + 1) * 3
 
+        step = step % len(self)
         if self.direction == JetpackColorCycleDirection.Forward:
             delta_start = 0
-            delta_end = -3
+            delta_end = -3 * step
         elif self.direction == JetpackColorCycleDirection.Backward:
-            delta_start = 3
+            delta_start = 3 * step
             delta_end = 0
 
-        pal[start:end] = (
-            pal[end + delta_end : end]
+        return bytes(
+            pal[:start]
+            + pal[end + delta_end : end]
             + pal[start + delta_start : end + delta_end]
             + pal[start : start + delta_start]
+            + pal[end:]
         )
 
     @classmethod
