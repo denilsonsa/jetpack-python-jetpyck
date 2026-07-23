@@ -144,10 +144,13 @@ There are three color ranges that get animated:
       charger/drain tiles, and for the trackbot and homer enemies
 * 16 colors (from 32 until 47)
     * red → gradient → white
-    * used for the high scores screen
+    * only used for the high scores screen
     * this color range is shared with other graphical elements, but those
       elements are not displayed in the high scores screen, and thus they are
       not animated
+
+The two 4-color cycles (located at the end of the palette) are cycling
+throughout the entire game, even during the high scores.
 
 """
 
@@ -885,3 +888,124 @@ def gfxdat_parser(rawdata: bytes) -> JetpackGfx:
     obj.pixels = pixels
     obj.palette_vga = rawpalette
     return obj
+
+
+# TODO: sanity check for tile consistency:
+# - If the transparent tiles have a different sprite than the background tile, there will be graphical glitches. (e.g. the column, the vines, etc.). The non-transparent pixels should be exactly the same as the tile under it.
+#
+# TODO: level rendering: on the level editor, the transparent blocks always have a hard-coded 6x6 green square in the middle of the 12x12 tile. This is not part of the tileset.
+#
+# TODO: Fonts
+# - Sanity check: If any font has a color value <=10, it will be rendered incorrectly. The original ones go from 11 to 31. (But often starting from 14.)
+# - Sanity check: If the hyphen character has pixels of color 31, those pixels will become transparent at the main menu. In fact, anything under 15 probably looks wrong, and any mix between these groups will also look wrong: (15..17), (18..21), (22..29), (30)
+#
+# 45 characters: ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,-+:?!$/
+#
+# The main menu characters are drawn with an outline. The outline seems to be the same character sprite shape (i.e. color=0 stays 0), but with all the colors changed to the color=1. Then, the sprite is drawn 4 times: 1 pixel up, 1 pixel down, 1 pixel left, 1 pixel right. Finally the real sprite is drawn at the center.
+#
+# How to change the colors of the characters:
+# - The initial font is in the top 32 colors of the palette, from 0 to 31.
+# - Color 0 is the universal transparent color. It's also full black, but only when used at the background.
+# - Color 1 is the darkest visible tone for a font.
+# - Color 31 is full white.
+# - Red goes from 32 to 47 (16 colors)
+#   - 1 -> 31 (looks wrong)
+#   - 2,3 -> 32
+#   - 4,5 -> 33
+#   - ...
+#   - 28,29 -> 45
+#   - 30,31 -> 46
+#   - The value 47 is never reached with this formula
+# - Formula seems to be: pixelcolor//2 + (basecolor-1)
+# - The white main menu items also have a transformation, perhaps to make it brighter/bolder:
+#   1 -> 255 (underflow?)
+#   2 -> 1
+#   3 -> 1
+#   4 -> 2
+#   (from 4 until 31) -> value - 2
+# - But the original pixel color is shown at the bottom of the main menu.
+#   from 1 to 31 -> 1 to 31
+# - Even whiter (at the level description screen):
+#   1 -> 254 (underflow)
+#   2 -> 255 (underflow)
+#   3 -> 0
+#   4 -> 1
+#   31 -> 28
+#   (i.e. value - 3)
+# - Bright blue (at the level saving screen)
+#   1 -> 141 (looks wrong)
+#   2,3 -> 142 (looks wrong)
+#   4,5 -> 143 (looks wrong)
+#   6,7 -> 144
+#   ...
+#   30,31 -> 156
+# - Credits screen:
+#   - In all cases, the color 1 is wrong (out-of-bounds). So, the values below are from 2 to 31.
+#   - red: 32 to 46
+#   - cyan: 128 to 142
+#   - green: 96 to 110
+#   - purple: 160 to 174
+# - Help screen:
+#   - gray color for most text, no color manipulation.
+#   - Bright cyan/green:
+#       1-5 -> underflows: 109 to 111
+#       6,7 -> 112
+#       30,31 -> 124
+#   - Bright blue:
+#       1-5 -> underflows: 125 to 127
+#       6,7 -> 128
+#       30,31 -> 140
+# - Level editor and level test status bar and save screen:
+#   - Blue:
+#     1 -> 144
+#     2,3 -> 145
+#     30,31 -> 159
+#   - Bright blue
+#     1 to 9 -> 139 to 143 wrong colors
+#     10,11 -> 144
+#     30,31 -> 154
+#   - Brightest green:
+#     1 to 7 -> 108 to 111 (wrong!)
+#     8,9 -> 112
+#     30,31 -> 123
+# - High scores
+#   Gold (1st place):
+#     1 to 3 -> 62 to 63 (wrong!)
+#     4 to 31 -> 64 to 77
+#   Silver (until 5th place):
+#     as-is, no color shifting
+#   Gray (until 15th place):
+#     1 to 5 -> 251 to 255 (underflow)
+#     6 -> 0 (wrong)
+#     7 to 31 -> 1 to 25
+#
+# The dash from the level save cursor is peculiar. It seems to cycle (backwards) extremely fast while waiting for input (once per frame or even quicker) colors from 16 or 17 until 47. So, 32 colors, crossing the light grays and the reds. But this isn't a color palette cycle. It's changing the sprite color, likely changing the target offset color, using the same formula and logic as any other character.
+#  starts: 1->17, 2,3->18 ... 30,31 -> 32
+#  Then it +1 the destination range to start from 18
+#  Then +1 again and again
+#  Until 1->32 up to 31->47
+#  Then it resets back to 1->17
+# I'd guess this is updating as often as the game is trying to read input from the keyboard.
+# Why is this a cycle of steps instead of 16? No idea.
+#
+# The dash from the main menu is also interesting.
+#  0 -> 0 (transparent stays transparent)
+#  1-> 226 (underflow)
+#  21 -> 246 (underflow)
+#  22 to 29 -> 247 to 254 (color cycling)
+#  30 -> 255 (probably a mistake)
+#  31 -> 0 (becomes transparent, oops!)
+# The original graphics is a sequence of 31, 27, 23, 27, 31
+#
+# The text is written in plaintext in the `JETPACK.EXE`.
+# The text is just C-style null-terminated strings.
+# There is a simple formatting language:
+#   {159}TAB{031}-{123}FILES
+# This is the main menu:
+#   "  {046}S{000}-{029}START      {110}H{000}-{029}HELP"
+#   "  {062}E{000}-{029}EDITOR     {110}B{000}-{029}BEST"
+#   "  {046}Q{000}-{029}QUIT"
+# The number inside curly braces is the target color for the font color 31, AKA the maximum color to be displayed.
+# Apparently, if the tag is 031 (or any value under 32, probably), the colors are NOT divided by 2.
+#
+# Upon printing the text on the screen, there is a 1 pixel gap between each character. (In addition to the baked-in 1px gap in the default graphics.)
