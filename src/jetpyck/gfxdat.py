@@ -167,6 +167,9 @@ from PIL._typing import StrOrBytesPath
 PILFileParameter = StrOrBytesPath | IO[bytes]
 
 __all__ = [
+    "JetpackColorCycleDirection",
+    "JetpackColorCycle",
+    "JetpackGfx",
     # Not including this in the default "*" import.
     # It's not generally useful outside this module.
     # Yet, if anyone wants, it's always possible to explicitly import it.
@@ -541,6 +544,13 @@ class JetpackGfx:
     default_width = 320
     default_height = 200
 
+    # 4 frames at 70HZ VGA output is 17.5Hz or about 57ms.
+    default_frame_delay = 57
+
+    # Change this class variable to a zoom level comfortable to you, when using
+    # the Jupyter notebook.
+    _ipython_diplay_zoom = 1
+
     def __init__(
         self,
         *,
@@ -569,7 +579,7 @@ class JetpackGfx:
         smaller than GIF, and also smaller than APNG.
         """
         with BytesIO() as img:
-            self.save_as_webp(img, zoom=2)
+            self.save_as_webp_animated(img, zoom=self._ipython_diplay_zoom)
             return img.getvalue()
 
     @property
@@ -704,23 +714,56 @@ class JetpackGfx:
 
         return images
 
+    def save_as_bmp(self, fp: PILFileParameter, zoom: int = 1) -> None:
+        # This preserves the palette.
+        # This file format has no compression and leads to large file sizes.
+        # It technically supports some compression, but many (old) applications
+        # cannot open compressed BMP files.
+        image = self.get_image(zoom)
+        image.save(
+            fp,
+            format="bmp",
+        )
+
+    def save_as_pcx(self, fp: PILFileParameter, zoom: int = 1) -> None:
+        # This preserves the palette.
+        # This file format has a very basic compression and leads to large file
+        # sizes.
+        image = self.get_image(zoom)
+        image.save(
+            fp,
+            format="pcx",
+        )
+
     def save_as_gif(self, fp: PILFileParameter, zoom: int = 1) -> None:
-        # But the GIF file size is too large for no benefit.
-        # Let's avoid using GIF.
-        # TODO: Check if the palette is being preserved.
+        # This preserves the palette.
+        # A single-frame GIF can keep the original palette.
+        image = self.get_image(zoom)
+        image.save(
+            fp,
+            format="gif",
+            # Don't optimize the palette, keep it as is.
+            optimize=False,
+        )
+
+    def save_as_gif_animated(self, fp: PILFileParameter, zoom: int = 1) -> None:
+        # This discards the palette.
+        # An animated GIF modifies the palette (e.g. by introducing a
+        # transparent color) across multiple frames to optimize for file size.
         images = self.get_images(zoom)
         images[0].save(
             fp,
             format="gif",
             append_images=images[1:],
-            duration=57,  # 57ms
+            duration=self.default_frame_delay,
             loop=0,
-            # Don't optimize the palette, keep it as is.
-            optimize=False,
+            # Let's not preserve the palette in animated GIFs. Instead, please
+            # optimize the frames of animation for smaller file size.
+            optimize=True,
         )
 
     def save_as_png(self, fp: PILFileParameter, zoom: int = 1) -> None:
-        # TODO: Check if the palette is being preserved.
+        # This preserves the palette.
         image = self.get_image(zoom)
         image.save(
             fp,
@@ -729,30 +772,31 @@ class JetpackGfx:
             compress_level=9,
         )
 
-    def save_as_apng(self, fp: PILFileParameter, zoom: int = 1) -> None:
-        # TODO: Either APNG images are not supported by browsers anymore, or Pillow isn't saving it correctly.
-        # Or I should just give up on APNG. It is not worth the trouble.
-        images = self.get_images(zoom)
-        images[0].save(
+    def save_as_webp(self, fp: PILFileParameter, zoom: int = 1) -> None:
+        # This discards the palette.
+        # WebP format has its own compression algorithms operating directly on
+        # the RGB values and was never intended to preserve the original
+        # palette. Even if internally the algorithm decides to create an
+        # indexed palette, that internal palette won't preserve the original
+        # color order. Additionally, it's an internal implementation detail and
+        # is not exposed to applications.
+        image = self.get_image(zoom)
+        image.save(
             fp,
-            format="png",
-            append_images=images[1:],
-            save_all=True,
-            default_image=False,
-            duration=57,  # 57ms
-            loop=0,
-            optimize=True,
-            compress_level=9,
+            format="webp",
+            lossless=True,
+            method=6,  # 0=fast, 6=slower
+            minimize_size=True,
         )
 
-    def save_as_webp(self, fp: PILFileParameter, zoom: int = 1) -> None:
-        # TODO: Check if the palette is being preserved.
+    def save_as_webp_animated(self, fp: PILFileParameter, zoom: int = 1) -> None:
+        # This discards the palette.
         images = self.get_images(zoom)
         images[0].save(
             fp,
             format="webp",
             append_images=images[1:],
-            duration=57,  # 57ms
+            duration=self.default_frame_delay,
             loop=0,
             lossless=True,
             method=6,  # 0=fast, 6=slower
@@ -793,7 +837,7 @@ class BitGenerator:
         return self.get_bits(8)
 
 
-def gfxdat_parser(rawdata: bytes) -> Image.Image:
+def gfxdat_parser(rawdata: bytes) -> JetpackGfx:
     # Raw palette has one byte per channel (R, G, B).
     # Each channel is 6-bit (0..63), as per VGA palette limitation.
     rawpalette = rawdata[: 256 * 3]
@@ -801,7 +845,7 @@ def gfxdat_parser(rawdata: bytes) -> Image.Image:
     rawpixels = rawdata[256 * 3 :]
 
     # One byte per channel (R, G, B), 8-bit per channel.
-    #palette = bytearray(round(c * 255 / 63) for c in rawpalette)
+    # palette = bytearray(round(c * 255 / 63) for c in rawpalette)
 
     # Our framebuffer where the compressed image will be uncompresed.
     pixels = bytearray(320 * 200)
@@ -824,6 +868,8 @@ def gfxdat_parser(rawdata: bytes) -> Image.Image:
                 remainder // 8, remainder
             )
         )
+    elif any(stream.buffer):
+        warn("Expected padding bits to be zero, but got {!r}".format(stream.buffer))
 
     obj = JetpackGfx()
     obj.pixels = pixels
