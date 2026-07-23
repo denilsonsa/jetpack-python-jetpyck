@@ -142,9 +142,12 @@ There are three color ranges that get animated:
       251 receives from 254)
     * used for the power-up items, for the conveyor belts, for the energy
       charger/drain tiles, and for the trackbot and homer enemies
-* ? colors (from ? until ?)
+* 16 colors (from 32 until 47)
     * red → gradient → white
     * used for the high scores screen
+    * this color range is shared with other graphical elements, but those
+      elements are not displayed in the high scores screen, and thus they are
+      not animated
 
 """
 
@@ -332,6 +335,8 @@ class JetpackColorCycle:
     JetpackColorCycle(first=247, last=250, direction=JetpackColorCycleDirection.Forward)
     >>> JetpackColorCycle.belts()
     JetpackColorCycle(first=251, last=254, direction=JetpackColorCycleDirection.Forward)
+    >>> JetpackColorCycle.high_scores()
+    JetpackColorCycle(first=32, last=47, direction=JetpackColorCycleDirection.Bounce)
 
     These objects are sortable.
 
@@ -536,6 +541,11 @@ class JetpackColorCycle:
     def belts(cls) -> Self:
         """Hard-coded color cycling range used for the conveyor belts."""
         return cls(251, 254)
+
+    @classmethod
+    def high_scores(cls) -> Self:
+        """Hard-coded color cycling range used for the conveyor belts."""
+        return cls(32, 47, JetpackColorCycleDirection.Bounce)
 
 
 class JetpackGfx:
