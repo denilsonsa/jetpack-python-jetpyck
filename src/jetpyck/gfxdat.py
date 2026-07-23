@@ -332,9 +332,9 @@ class JetpackColorCycle:
     These color cycling ranges are hard-coded into the game:
 
     >>> JetpackColorCycle.stairs()
-    JetpackColorCycle(first=247, last=250, direction=JetpackColorCycleDirection.Forward)
+    JetpackColorCycle(first=247, last=250, direction=JetpackColorCycleDirection.Backward)
     >>> JetpackColorCycle.belts()
-    JetpackColorCycle(first=251, last=254, direction=JetpackColorCycleDirection.Forward)
+    JetpackColorCycle(first=251, last=254, direction=JetpackColorCycleDirection.Backward)
     >>> JetpackColorCycle.high_scores()
     JetpackColorCycle(first=32, last=47, direction=JetpackColorCycleDirection.Bounce)
 
@@ -535,12 +535,12 @@ class JetpackColorCycle:
     @classmethod
     def stairs(cls) -> Self:
         """Hard-coded color cycling range used for the stairs."""
-        return cls(247, 250)
+        return cls(247, 250, JetpackColorCycleDirection.Backward)
 
     @classmethod
     def belts(cls) -> Self:
         """Hard-coded color cycling range used for the conveyor belts."""
-        return cls(251, 254)
+        return cls(251, 254, JetpackColorCycleDirection.Backward)
 
     @classmethod
     def high_scores(cls) -> Self:
