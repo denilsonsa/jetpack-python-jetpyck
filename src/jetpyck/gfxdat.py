@@ -170,6 +170,8 @@ from warnings import warn
 from PIL import Image
 from PIL._typing import StrOrBytesPath
 
+from .rle import JetpackRLEDecoder
+
 PILFileParameter = StrOrBytesPath | IO[bytes]
 
 __all__ = [
@@ -817,39 +819,6 @@ class JetpackGfx:
         )
 
 
-class BitGenerator:
-    def __init__(self, data: bytes):
-        self.data = data
-        self.pointer = 0
-        self.buffer: list[int] = []
-
-    def remaining_bits(self) -> int:
-        return len(self.buffer) + len(self.data) - self.pointer
-
-    def is_empty(self) -> bool:
-        return self.pointer >= len(self.data) and len(self.buffer) == 0
-
-    def consume_byte(self) -> int:
-        out = self.data[self.pointer]
-        self.pointer += 1
-        return out
-
-    def get_bit(self) -> int:
-        if len(self.buffer) == 0:
-            self.buffer.extend(int(bit) for bit in "{:08b}".format(self.consume_byte()))
-        return self.buffer.pop(0)
-
-    def get_bits(self, how_many: int) -> int:
-        out = 0
-        for i in range(how_many):
-            out <<= 1
-            out |= self.get_bit()
-        return out
-
-    def get_byte(self) -> int:
-        return self.get_bits(8)
-
-
 def gfxdat_parser(rawdata: bytes) -> JetpackGfx:
     # Raw palette has one byte per channel (R, G, B).
     # Each channel is 6-bit (0..63), as per VGA palette limitation.
@@ -861,28 +830,10 @@ def gfxdat_parser(rawdata: bytes) -> JetpackGfx:
     # palette = bytearray(round(c * 255 / 63) for c in rawpalette)
 
     # Our framebuffer where the compressed image will be uncompresed.
-    pixels = bytearray(320 * 200)
-    pointer = 0
-
-    stream = BitGenerator(rawpixels)
-    while pointer < len(pixels):
-        is_repeating = stream.get_bit()
-        qty = 1
-        if is_repeating:
-            qty = 2 + stream.get_bits(5)
-        colorindex = stream.get_byte()
-        for i in range(qty):
-            pixels[pointer] = colorindex
-            pointer += 1
-
-    if (remainder := stream.remaining_bits()) >= 8:
-        warn(
-            "Warning: {} trailing bytes ({} bits) are being ignored after the pixel data.".format(
-                remainder // 8, remainder
-            )
-        )
-    elif any(stream.buffer):
-        warn("Expected padding bits to be zero, but got {!r}".format(stream.buffer))
+    # pixels = bytearray(320 * 200)
+    with JetpackRLEDecoder(rawpixels) as decoder:
+        pixels = decoder.read(320 * 200)
+        assert len(pixels) == 320 * 200
 
     obj = JetpackGfx()
     obj.pixels = pixels
