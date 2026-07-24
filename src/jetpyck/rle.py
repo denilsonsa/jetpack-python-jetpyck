@@ -49,13 +49,13 @@ from collections import deque
 from collections.abc import Sequence
 from contextlib import contextmanager
 from types import TracebackType
-from typing import Iterator, Literal, Self
+from typing import Iterator, Literal, Self, overload
 from warnings import warn
 
-__all__ = ["JetpackRLEDecoder"]
+__all__ = ["JetpackRLEDecoder", "JetpackRLEEncoder"]
 
 
-def bits_from_value(qty: int, value: int) -> Iterable[int]:
+def bits_from_value(qty: int, value: int) -> Sequence[int]:
     """Returns the lower `qty` bits from `value`, in order from MSB to LSB.
 
     ---
@@ -382,3 +382,79 @@ class JetpackRLEDecoder:
                 if pointer >= how_many_bytes:
                     break
             return buffer
+
+
+class BitWriter:
+    r"""Receives bits over time, and then groups them into bytes. As a
+    comparison, if an io.BinaryIO object receives bytes sequentially and
+    accumulates them in a buffer, this BitWriter object receives bits
+    sequentially and accumulates them into bytes.
+
+    ---
+
+    """
+
+    # TODO: Write tests ↑
+
+    def __init__(self) -> None:
+        self.data = bytearray()
+        # Stream of bits waiting to be grouped into a byte.
+        self.bitbuffer: deque[int] = deque()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> Literal[False]:
+        self.add_padding_bits()
+        return False
+
+    def __bytes__(self) -> bytes:
+        return bytes(self.data)
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    @overload
+    def __getitem__(self, index_or_slice: int) -> int: ...
+
+    @overload
+    def __getitem__(self, index_or_slice: slice) -> Sequence[int]: ...
+
+    def __getitem__(self, index_or_slice: int | slice) -> int | Sequence[int]:
+        return self.data[index_or_slice]
+
+    def add_padding_bits(self) -> None:
+        if len(self.bitbuffer) == 0:
+            return
+        self.put_bits(8 - len(self.bitbuffer), 0)
+        assert len(self.bitbuffer) == 0
+
+    def put_bits(self, qty: int, value: int) -> None:
+        """Appends `qty` bits to the data, represented by `value`."""
+        if qty <= 0:
+            raise ValueError(
+                f"The amount of bits must be positive and greater than zero"
+            )
+        if value < 0:
+            raise ValueError(f"Negative values are not allowed")
+        if not 0 <= value < (1 << qty):
+            raise ValueError(
+                f"Out-of-range value, {value} cannot be represented in {qty} bits"
+            )
+
+        self.bitbuffer.extend(bits_from_value(qty, value))
+        while len(self.bitbuffer) >= 8:
+            byte = 0
+            for i in range(8):
+                bit = self.bitbuffer.popleft()
+                assert bit in {0, 1}
+                byte = (byte << 1) | bit
+            self.data.append(byte)
+
+
+class JetpackRLEEncoder: ...
