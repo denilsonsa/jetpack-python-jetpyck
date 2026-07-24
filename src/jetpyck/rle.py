@@ -48,6 +48,7 @@ import warnings
 from collections import deque
 from collections.abc import Sequence
 from contextlib import contextmanager
+from itertools import groupby
 from types import TracebackType
 from typing import Iterator, Literal, Self, overload
 from warnings import warn
@@ -403,10 +404,16 @@ class BitWriter:
     1
     >>> bytes(bw)
     b'\xc9'
+    >>> bw.add_padding_bits()  # No-op
+    >>> bytes(bw)
+    b'\xc9'
 
     >>> bw = BitWriter()
     >>> bw.put_bits(2, 0b11)
     >>> bw.add_padding_bits()
+    >>> bytes(bw)
+    b'\xc0'
+    >>> bw.add_padding_bits()  # No-op
     >>> bytes(bw)
     b'\xc0'
 
@@ -488,4 +495,46 @@ class BitWriter:
             self.data.append(byte)
 
 
-class JetpackRLEEncoder: ...
+# TODO: Write this class. Write a description. Write tests.
+class JetpackRLEEncoder:
+    r"""
+
+    >>> enc = JetpackRLEEncoder()
+    >>> enc.encode_bytes(b'AAAAAACDDD')
+    """
+
+    def __init__(self) -> None:
+        self.bitwriter = BitWriter()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> Literal[False]:
+        self.bitwriter.add_padding_bits()
+        return False
+
+    def __bytes__(self) -> bytes:
+        return bytes(self.bitwriter)
+
+    def encode_bytes(self, data: Iterator[int]) -> None:
+        for byte, repetitions in groupby(data):
+            assert 0 <= byte < 256
+            total = len(list(repetitions))
+            while total > 0:
+                if total == 1:
+                    # Bit value zero = no repetition
+                    self.bitwriter.put_bits(1, 0)
+                    total -= 1
+                else:
+                    block = min(total, 33)
+                    total -= block
+                    # Bit value one = repetition
+                    self.bitwriter.put_bits(1, 1)
+                    # 5 bits = how many repetitions
+                    self.bitwriter.put_bits(5, block - 2)
+                self.bitwriter.put_bits(8, byte)
