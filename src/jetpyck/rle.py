@@ -57,7 +57,8 @@ __all__ = ["JetpackRLEDecoder", "JetpackRLEEncoder"]
 
 
 def bits_from_value(qty: int, value: int) -> Sequence[int]:
-    """Returns the lower `qty` bits from `value`, in order from MSB to LSB.
+    """Returns the lower `qty` bits from `value`, bit-by-bit (i.e. a sequence
+    of integers), in the order from MSB to LSB.
 
     ---
 
@@ -142,7 +143,8 @@ class BitStream:
     IndexError: ...
 
     For `bytes` and `bytearray` objects, all elements are unsigned bytes. But
-    that may not be the case for other sequences.
+    that may not be the case for other sequences (e.g. list of int). There are
+    some guards against passing invalid values as the input data.
 
     >>> bad = BitStream([-1])
     >>> bad.get_bit()
@@ -211,7 +213,7 @@ class BitStream:
 
 @contextmanager
 def warnings_to_stdout() -> Iterator[None]:
-    """Context manager that temporarily print warnings to stdout.
+    """Context manager to temporarily print warnings to stdout.
 
     Useful in doctests.
     See: https://stackoverflow.com/questions/2418570/testing-warnings-with-doctest
@@ -222,7 +224,7 @@ def warnings_to_stdout() -> Iterator[None]:
 
 
 class JetpackRLEDecoder:
-    r"""Given a `bytes` object (or any sequence of bytes), decodes is using
+    r"""Given a `bytes` object (or any sequence of bytes), decodes it using
     Jetpack's RLE algorithm.
 
     ---
@@ -404,7 +406,7 @@ class BitWriter:
     1
     >>> bytes(bw)
     b'\xc9'
-    >>> bw.add_padding_bits()  # No-op
+    >>> bw.add_padding_bits()  # No-op because no padding is needed
     >>> bytes(bw)
     b'\xc9'
 
@@ -413,7 +415,7 @@ class BitWriter:
     >>> bw.add_padding_bits()
     >>> bytes(bw)
     b'\xc0'
-    >>> bw.add_padding_bits()  # No-op
+    >>> bw.add_padding_bits()  # No-op because padding has already been added
     >>> bytes(bw)
     b'\xc0'
 
@@ -448,7 +450,7 @@ class BitWriter:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> Literal[False]:
-        self.add_padding_bits()
+        self.close()
         return False
 
     def __bytes__(self) -> bytes:
@@ -465,6 +467,13 @@ class BitWriter:
 
     def __getitem__(self, index_or_slice: int | slice) -> int | Sequence[int]:
         return self.data[index_or_slice]
+
+    def close(self) -> None:
+        """This method is an alias to add_padding_bits().
+
+        It has been added because it is used in a similar way to file.close().
+        """
+        self.add_padding_bits()
 
     def add_padding_bits(self) -> None:
         if len(self.bitbuffer) == 0:
@@ -495,12 +504,125 @@ class BitWriter:
             self.data.append(byte)
 
 
-# TODO: Write this class. Write a description. Write tests.
 class JetpackRLEEncoder:
-    r"""
+    r"""Given an arbitrary `bytes` object (or any sequence of bytes), encodes
+    it using Jetpack's RLE algorithm.
+
+    ---
+
+    It is necessary to `.close()` to finish the bit stream, adding the
+    necessary padding bits at the end. This can be done manually or using a
+    context manager.
+
+    >>> binarify = lambda arr: ' '.join(f'{b:08b}' for b in arr)
+    >>> binarify(b'\x00\x01\x5a\xff')
+    '00000000 00000001 01011010 11111111'
 
     >>> enc = JetpackRLEEncoder()
-    >>> enc.encode_bytes(b'AAAAAACDDD')
+    >>> enc.encode_bytes([0xFF])
+    >>> enc.close()
+    >>> binarify(bytes(enc))
+    '01111111 10000000'
+
+    >>> with JetpackRLEEncoder() as enc:
+    ...     enc.encode_bytes([0x81])
+    >>> binarify(bytes(enc))
+    '01000000 10000000'
+
+    >>> with JetpackRLEEncoder() as enc:
+    ...     enc.encode_bytes([0xFF, 0xFF])
+    >>> enc.close()
+    >>> binarify(bytes(enc))
+    '10000011 11111100'
+
+    >>> with JetpackRLEEncoder() as enc:
+    ...     enc.encode_bytes([0x81, 0x81])
+    >>> enc.close()
+    >>> binarify(bytes(enc))
+    '10000010 00000100'
+
+    >>> with JetpackRLEEncoder() as enc:
+    ...     enc.encode_bytes([0x81, 0x81, 0x81])
+    >>> enc.close()
+    >>> binarify(bytes(enc))
+    '10000110 00000100'
+
+    >>> with JetpackRLEEncoder() as enc:
+    ...     enc.encode_bytes([0x81, 0x81, 0x81, 0x81])
+    >>> enc.close()
+    >>> binarify(bytes(enc))
+    '10001010 00000100'
+
+    >>> with JetpackRLEEncoder() as enc:
+    ...     enc.encode_bytes([0x81] * 33)
+    >>> enc.close()
+    >>> binarify(bytes(enc))
+    '11111110 00000100'
+
+    >>> with JetpackRLEEncoder() as enc:
+    ...     enc.encode_bytes([0x81] * 34)
+    >>> enc.close()
+    >>> binarify(bytes(enc))
+    '11111110 00000101 00000010'
+
+    >>> with JetpackRLEEncoder() as enc:
+    ...     enc.encode_bytes([0x81] * 35)
+    >>> enc.close()
+    >>> binarify(bytes(enc))
+    '11111110 00000110 00001000 00010000'
+
+    >>> with JetpackRLEEncoder() as enc:
+    ...     enc.encode_bytes([0x81] * 36)
+    >>> enc.close()
+    >>> binarify(bytes(enc))
+    '11111110 00000110 00011000 00010000'
+
+    >>> with JetpackRLEEncoder() as enc:
+    ...     enc.encode_bytes([0x81] * 37)
+    >>> enc.close()
+    >>> binarify(bytes(enc))
+    '11111110 00000110 00101000 00010000'
+
+    >>> with JetpackRLEEncoder() as enc:
+    ...     enc.encode_bytes([0x81] * 66)
+    >>> enc.close()
+    >>> binarify(bytes(enc))
+    '11111110 00000111 11111000 00010000'
+
+    >>> with JetpackRLEEncoder() as enc:
+    ...     enc.encode_bytes([0x81] * 67)
+    >>> enc.close()
+    >>> binarify(bytes(enc))
+    '11111110 00000111 11111000 00010100 00001000'
+
+    >>> data = b'A' * 5 + b'U' + b'c'*9
+    >>> data
+    b'AAAAAUccccccccc'
+    >>> with JetpackRLEEncoder() as enc:
+    ...     enc.encode_bytes(data)
+    >>> enc.close()
+    >>> binarify(bytes(enc))
+    '10001101 00000100 10101011 00111011 00011000'
+    >>> with JetpackRLEDecoder(bytes(enc)) as dec:
+    ...     decoded = dec.read(0)
+    >>> data == decoded
+    True
+
+    For `bytes` and `bytearray` objects, all elements are unsigned bytes. But
+    that may not be the case for other sequences (e.g. list of int). There are
+    some guards against passing invalid values as the input data.
+
+    >>> enc = JetpackRLEEncoder()
+    >>> enc.encode_bytes([-1])
+    Traceback (most recent call last):
+    ...
+    ValueError: ...
+
+    >>> enc = JetpackRLEEncoder()
+    >>> enc.encode_bytes([256])
+    Traceback (most recent call last):
+    ...
+    ValueError: ...
     """
 
     def __init__(self) -> None:
@@ -515,15 +637,19 @@ class JetpackRLEEncoder:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> Literal[False]:
-        self.bitwriter.add_padding_bits()
+        self.close()
         return False
 
     def __bytes__(self) -> bytes:
         return bytes(self.bitwriter)
 
+    def close(self) -> None:
+        self.bitwriter.close()
+
     def encode_bytes(self, data: Iterator[int]) -> None:
         for byte, repetitions in groupby(data):
-            assert 0 <= byte < 256
+            if not 0 <= byte < 256:
+                raise ValueError(f"Integer is not an unsigned byte: {byte}")
             total = len(list(repetitions))
             while total > 0:
                 if total == 1:
