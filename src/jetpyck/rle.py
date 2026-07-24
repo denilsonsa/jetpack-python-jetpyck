@@ -46,7 +46,7 @@ The following games use a different encoding, not supported by this module:
 
 import warnings
 from collections import deque
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from contextlib import contextmanager
 from itertools import groupby
 from types import TracebackType
@@ -646,7 +646,7 @@ class JetpackRLEEncoder:
     def close(self) -> None:
         self.bitwriter.close()
 
-    def encode_bytes(self, data: Iterator[int]) -> None:
+    def encode_bytes(self, data: Iterable[int]) -> None:
         for byte, repetitions in groupby(data):
             if not 0 <= byte < 256:
                 raise ValueError(f"Integer is not an unsigned byte: {byte}")

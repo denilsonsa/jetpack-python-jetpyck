@@ -698,10 +698,8 @@ class JetpackLevel:
             return cls.unpack(stream, filename=filename)
 
     def save_as_jet(self, filename: str | Path) -> None:
-        """Convenience function to write directly to a file.
-        """
-        with open(filename, "wb") as f:
-            f.write(self.pack())
+        """Convenience function to write directly to a file."""
+        Path(filename).write_bytes(self.pack())
 
     def as_printable_text(self) -> str:
         """Returns a textual representation of the level.
@@ -1122,7 +1120,5 @@ class JetpackLevelPack:
             return cls.unpack(stream)
 
     def save_as_dat(self, filename: str | Path) -> None:
-        """Convenience function to write directly to a file.
-        """
-        with open(filename, "wb") as f:
-            f.write(self.pack())
+        """Convenience function to write directly to a file."""
+        Path(filename).write_bytes(self.pack())

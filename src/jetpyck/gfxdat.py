@@ -163,7 +163,7 @@ from functools import reduce
 from io import BytesIO
 from itertools import batched, chain
 from pathlib import Path
-from typing import IO, Iterator, Optional, Self
+from typing import BinaryIO, IO, Iterator, Optional, Self
 from warnings import warn
 
 # Please install `pillow`, it's the most popular library for working with
@@ -1069,7 +1069,7 @@ class JetpackGfx:
         #
         # Rewriting that logic to work with stream might be neat, but also
         # sounds like a lot of refactoring work for no real benefit.
-        return self.load_from_bytes(stream.read())
+        return cls.load_from_bytes(stream.read())
 
     def pack(self) -> bytes:
         palette = bytes(self.palette_vga)
@@ -1108,10 +1108,8 @@ class JetpackGfx:
         return cls(pixels=pixels, palette_vga=palette)
 
     def save_as_dat(self, filename: str | Path) -> None:
-        """Convenience function to write directly to a file.
-        """
-        with open(filename, "wb") as f:
-            f.write(self.pack())
+        """Convenience function to write directly to a file."""
+        Path(filename).write_bytes(self.pack())
 
     @classmethod
     def load_from_image_file(cls, fp: PILFileParameter) -> Self:
@@ -1141,14 +1139,17 @@ class JetpackGfx:
 
         # palette = img.palette.tobytes()
         palette = img.getpalette()
+        if palette is None:
+            raise ValueError(f"Expected a palette, but got {palette!r}")
         if len(palette) != 3 * 256:
-            raise ValueError(f"Expected a palete with 256 colors, but got {len(palette)/3}")
+            raise ValueError(
+                f"Expected a palette with 256 colors, but got {len(palette)/3}"
+            )
         assert all(0 <= c < 256 for c in palette)
         palette_vga = bytes(color_8bit_to_6bit(c) for c in palette)
 
-        pixels = img.getdata()
+        pixels = bytes(img.getdata())
         assert len(pixels) == 320 * 200
-        assert all(0 <= p < 256 for p in pixels)
 
         return cls(pixels=pixels, palette_vga=palette_vga)
 
