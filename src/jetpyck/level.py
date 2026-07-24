@@ -49,7 +49,7 @@ __all__ = [
 
 import struct
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, KW_ONLY, InitVar
 from enum import IntEnum
 from io import BytesIO
@@ -681,18 +681,20 @@ class JetpackLevel:
 
         These files are found at `LEVELS/*.JET`.
         """
-        with Path(filename).open('rb') as f:
+        with Path(filename).open("rb") as f:
             return cls.unpack(f)
 
     @classmethod
-    def load_from_bytes(cls, data: Sequence[int], filename: Optional[str | Path] = None) -> Self:
+    def load_from_bytes(
+        cls, data: Sequence[int], filename: Optional[str | Path] = None
+    ) -> Self:
         """Creates a new JetpackLevel instance, loading from a `bytes` object.
 
         ---
 
         TODO: Add tests loading a real-world file.
         """
-        with BytesIO(data) as stream:
+        with BytesIO(bytes(data)) as stream:
             return cls.unpack(stream, filename=filename)
 
     def as_printable_text(self) -> str:
@@ -1099,7 +1101,7 @@ class JetpackLevelPack:
 
         The game has a `JETLEV.DAT` file with the level pack.
         """
-        with Path(filename).open('rb') as f:
+        with Path(filename).open("rb") as f:
             return cls.unpack(f)
 
     @classmethod
@@ -1110,5 +1112,5 @@ class JetpackLevelPack:
 
         TODO: Add tests loading a real-world file.
         """
-        with BytesIO(data) as stream:
+        with BytesIO(bytes(data)) as stream:
             return cls.unpack(stream)

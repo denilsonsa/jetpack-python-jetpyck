@@ -902,6 +902,17 @@ class JetpackGfx:
             JetpackColorCycle.belts(),
         ]
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, JetpackGfx):
+            return NotImplemented
+        return (
+            bytes(self.pixels) == bytes(other.pixels)
+            and bytes(self.palette_vga) == bytes(other.palette_vga)
+            and self.width == other.width
+            and self.height == other.height
+            and self.color_cycles == other.color_cycles
+        )
+
     def __repr__(self) -> str:
         return "<JetpackGfx {}x{} {!r}>".format(self.width, self.height, id(self))
 
@@ -1076,6 +1087,45 @@ class JetpackGfx:
             assert len(pixels) == 320 * 200
 
         return cls(pixels=pixels, palette_vga=palette)
+
+    @classmethod
+    def load_from_image_file(cls, fp: PILFileParameter) -> Self:
+        """Creates a new JetpackGfx instance, loading from an image file.
+
+        Only images with "P" mode (8-bit per pixel with a 256-color palette) are
+        accepted.
+
+        Accepts any image format supported by PIL. See:
+        https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html
+        """
+        img = Image.open(fp)
+        return cls.load_from_image(img)
+
+    @classmethod
+    def load_from_image(cls, img: Image.Image) -> Self:
+        """Creates a new JetpackGfx instance, loading from an existing
+        PIL.Image.Image instance.
+
+        Only accepts images with "P" mode (8-bit per pixel with a 256-color
+        palette).
+        """
+        if img.size != (320, 200):
+            raise ValueError(f"Expected 320x200 dimensions, but got {img.size!r}")
+        if img.mode != "P":
+            raise ValueError(f"Expected 'P' mode, but got {img.mode!r}")
+
+        # palette = img.palette.tobytes()
+        palette = img.getpalette()
+        if len(palette) != 3 * 256:
+            raise ValueError(f"Expected a palete with 256 colors, but got {len(palette)/3}")
+        assert all(0 <= c < 256 for c in palette)
+        palette_vga = bytes(color_8bit_to_6bit(c) for c in palette)
+
+        pixels = img.getdata()
+        assert len(pixels) == 320 * 200
+        assert all(0 <= p < 256 for p in pixels)
+
+        return cls(pixels=pixels, palette_vga=palette_vga)
 
     def save_as_bmp(self, fp: PILFileParameter, zoom: int = 1) -> None:
         # This preserves the palette.
