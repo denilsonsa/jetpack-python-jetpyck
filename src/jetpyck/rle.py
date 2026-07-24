@@ -55,6 +55,49 @@ from warnings import warn
 __all__ = ["JetpackRLEDecoder"]
 
 
+def bits_from_value(qty: int, value: int) -> Iterable[int]:
+    """Returns the lower `qty` bits from `value`, in order from MSB to LSB.
+
+    ---
+
+    >>> list(bits_from_value(0, 0b0))
+    []
+    >>> list(bits_from_value(1, 0b0))
+    [0]
+    >>> list(bits_from_value(1, 0b1))
+    [1]
+    >>> list(bits_from_value(4, 0b0010))
+    [0, 0, 1, 0]
+    >>> list(bits_from_value(4, 0b1000))
+    [1, 0, 0, 0]
+    >>> list(bits_from_value(4, 0b1011))
+    [1, 0, 1, 1]
+    >>> list(bits_from_value(4, 0b1111))
+    [1, 1, 1, 1]
+    >>> list(bits_from_value(8, 0b10011100))
+    [1, 0, 0, 1, 1, 1, 0, 0]
+
+    If value is larger than the amount of bits requested, the higher bits are
+    discarded. This usage is discouraged, though.
+
+    >>> list(bits_from_value(1, 0b10))
+    [0]
+    >>> list(bits_from_value(2, 0b1100))
+    [0, 0]
+    >>> list(bits_from_value(3, 0b101010))
+    [0, 1, 0]
+
+    """
+    if qty < 0:
+        raise ValueError(f"Negative values are not allowed")
+    if value < 0:
+        raise ValueError(f"Negative values are not allowed")
+    bits = bytearray(qty)
+    for i in range(qty):
+        bits[i] = (value >> (qty - i - 1)) & 1
+    return bits
+
+
 class BitStream:
     r"""Given a `bytes` object (or any sequence of bytes), this BitStream object
     will return bits from it. As a comparison, if a file-like object reads
@@ -140,10 +183,7 @@ class BitStream:
                 f"Integer at position {self.pointer} is not an unsigned byte: {byte}"
             )
         self.pointer += 1
-        # In low-level languages, converting to string and then converting back
-        # to integers isn't as efficient as bit manipulation. However, this
-        # non-efficient approach is so simple, clear and readable.
-        self.bitbuffer.extend(int(bit) for bit in "{:08b}".format(byte))
+        self.bitbuffer.extend(bits_from_value(8, byte))
 
     def get_bit(self) -> int:
         """Returns one bit from the bit stream."""
