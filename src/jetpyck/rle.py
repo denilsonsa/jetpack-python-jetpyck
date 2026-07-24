@@ -293,6 +293,23 @@ class JetpackRLEDecoder:
     ...     with JetpackRLEDecoder([0b10000110, 0b00111101, 0b10010100]) as dec:
     ...         print(dec.read(4).hex())
     8f8f8fca
+
+    Passing zero will read until EOF:
+
+    >>> with warnings_to_stdout():
+    ...     with JetpackRLEDecoder([0b10000110, 0b00111110, 0b00101100, 0b10100111, 0b00111000]) as dec:
+    ...         print(dec.read(1).hex())
+    ...         print(dec.read(1).hex())
+    ...         print(dec.read(1).hex())
+    8f8f8f
+    cacacaca
+    e7
+    >>> with warnings_to_stdout():
+    ...     with JetpackRLEDecoder([0b10000110, 0b00111110, 0b00101100, 0b10100111, 0b00111000]) as dec:
+    ...         print(repr(dec.read(0).hex()))
+    ...         print(repr(dec.read(0).hex()))  # Already EOF, returns empty.
+    '8f8f8fcacacacae7'
+    ''
     """
 
     def __init__(self, data: Sequence[int]):
@@ -343,12 +360,25 @@ class JetpackRLEDecoder:
             yield qty, databyte
 
     def read(self, how_many_bytes: int) -> bytearray:
-        """Reads (at least) the specified amount of bytes."""
-        buffer = bytearray(how_many_bytes)
-        pointer = 0
-        for qty, value in self.items():
-            buffer[pointer : pointer + qty] = [value] * qty
-            pointer += qty
-            if pointer >= how_many_bytes:
-                break
-        return buffer
+        """Reads (at least) the specified amount of bytes.
+
+        If zero bytes are asked, read until EOF.
+        """
+        if how_many_bytes == 0:
+            buffer = bytearray()
+            if self.is_eof():
+                return buffer
+            for qty, value in self.items():
+                buffer.extend([value] * qty)
+                if self.is_eof():
+                    break
+            return buffer
+        else:
+            buffer = bytearray(how_many_bytes)
+            pointer = 0
+            for qty, value in self.items():
+                buffer[pointer : pointer + qty] = [value] * qty
+                pointer += qty
+                if pointer >= how_many_bytes:
+                    break
+            return buffer
