@@ -392,9 +392,40 @@ class BitWriter:
 
     ---
 
-    """
+    It is necessary to add padding bits at the end. This can be done manually
+    or using a context manager.
 
-    # TODO: Write tests ↑
+    >>> bw = BitWriter()
+    >>> bw.put_bits(2, 0b11)
+    >>> bw.put_bits(2, 0b00)
+    >>> bw.put_bits(4, 0b1001)
+    >>> len(bw)
+    1
+    >>> bytes(bw)
+    b'\xc9'
+
+    >>> bw = BitWriter()
+    >>> bw.put_bits(2, 0b11)
+    >>> bw.add_padding_bits()
+    >>> bytes(bw)
+    b'\xc0'
+
+    >>> with BitWriter() as bw:
+    ...     bw.put_bits(3, 0b101)
+    >>> bytes(bw)
+    b'\xa0'
+
+    >>> with BitWriter() as bw:
+    ...     bw.put_bits(1, 0b1)
+    ...     bw.put_bits(5, 0b11011)
+    ...     bw.put_bits(8, 0b01010101)
+    >>> bytes(bw).hex()
+    'ed54'
+    >>> len(bw)
+    2
+    >>> hex(bw[0])
+    '0xed'
+    """
 
     def __init__(self) -> None:
         self.data = bytearray()
