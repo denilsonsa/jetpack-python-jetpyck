@@ -156,12 +156,13 @@ throughout the entire game, even during the high scores.
 
 import math
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from enum import IntEnum
 from functools import reduce
 from io import BytesIO
 from itertools import batched, chain
+from pathlib import Path
 from typing import IO, Iterator, Optional, Self
 from warnings import warn
 
@@ -178,22 +179,13 @@ __all__ = [
     "JetpackColorCycleDirection",
     "JetpackColorCycle",
     "JetpackGfx",
-    # Not including this in the default "*" import.
-    # It's not generally useful outside this module.
-    # Yet, if anyone wants, it's always possible to explicitly import it.
-    # "BitGenerator",
-    #
     # Not including these functions in the default "*" import.
     # If anyone wants, just import them explicitly.
+    # "color_6bit_to_8bit",
+    # "color_8bit_to_6bit",
     # "jswitch_name_decode",
     # "jswitch_name_encode",
-    # TODO: Add stuff here.
 ]
-
-
-# TODO: Document the code in this module!
-# Also refactor this code as needed!
-# I should probably create a new class JetpackGfx instead of the plain function gfxdat_parser()
 
 
 def jswitch_name_decode(data: Iterable[int]) -> str:
@@ -888,17 +880,28 @@ class JetpackGfx:
     def __init__(
         self,
         *,
+        pixels: Optional[Iterable[int]] = None,
+        palette_vga: Optional[Iterable[int]] = None,
         width: int = default_width,
         height: int = default_height,
     ):
         self.width = width
         self.height = height
-        self.pixels: bytes | bytearray = bytearray(self.width * self.height)
+
+        if pixels is None:
+            self.pixels = bytearray(self.width * self.height)
+        else:
+            self.pixels = bytearray(pixels)
+
+        if palette_vga is None:
+            self.palette_vga = bytearray(self.default_palette_vga)
+        else:
+            self.palette_vga = bytearray(palette_vga)
+
         self.color_cycles = [
             JetpackColorCycle.ladders(),
             JetpackColorCycle.belts(),
         ]
-        self.palette_vga: bytes | bytearray = bytearray(self.default_palette_vga)
 
     def __repr__(self) -> str:
         return "<JetpackGfx {}x{} {!r}>".format(self.width, self.height, id(self))
@@ -957,7 +960,7 @@ class JetpackGfx:
 
         >>> static = JetpackGfx()
         >>> static.color_cycles = []
-        >>> static.palette_vga = bytes(range(65, 65 + 8 * 3))
+        >>> static.palette_vga = bytearray(bytes(range(65, 65 + 8 * 3)))
         >>> static.generate_color_cycle_vga_palettes()
         [b'ABCDEFGHIJKLMNOPQRSTUVWX']
 
@@ -966,9 +969,9 @@ class JetpackGfx:
         ...     JetpackColorCycle(1, 3, JetpackColorCycleDirection.Forward),
         ...     JetpackColorCycle(4, 5, JetpackColorCycleDirection.Backward),
         ... ]
-        >>> gfx.palette_vga = bytes(range(65, 65 + 8 * 3))
+        >>> gfx.palette_vga = bytearray(bytes(range(65, 65 + 8 * 3)))
         >>> gfx.palette_vga
-        b'ABCDEFGHIJKLMNOPQRSTUVWX'
+        bytearray(b'ABCDEFGHIJKLMNOPQRSTUVWX')
         >>> print('\n'.join(repr(p) for p in gfx.generate_color_cycle_vga_palettes()))
         b'ABCDEFGHIJKLMNOPQRSTUVWX'
         b'ABCJKLDEFGHIPQRMNOSTUVWX'
@@ -1046,6 +1049,26 @@ class JetpackGfx:
             images.append(frame)
 
         return images
+
+    @classmethod
+    def load_from_dat_filename(cls, filename: str | Path) -> Self:
+        """Creates a new JetpackGfx instance, loading from a file."""
+        return cls.load_from_dat(Path(filename).read_bytes())
+
+    @classmethod
+    def load_from_dat(cls, data: Sequence[int]) -> Self:
+        """Creates a new JetpackGfx instance, loading from a `bytes` object."""
+        # Raw palette has one byte per channel (R, G, B).
+        # Each channel is 6-bit (0..63), as per VGA palette limitation.
+        palette = data[: 256 * 3]
+        # RLE-encoded pixel data.
+        rle_pixels = data[256 * 3 :]
+        # Decoding the compressed stream of pixels.
+        with JetpackRLEDecoder(rle_pixels) as decoder:
+            pixels = decoder.read(320 * 200)
+            assert len(pixels) == 320 * 200
+
+        return cls(pixels=pixels, palette_vga=palette)
 
     def save_as_bmp(self, fp: PILFileParameter, zoom: int = 1) -> None:
         # This preserves the palette.
@@ -1135,28 +1158,6 @@ class JetpackGfx:
             method=6,  # 0=fast, 6=slower
             minimize_size=True,
         )
-
-
-def gfxdat_parser(rawdata: bytes) -> JetpackGfx:
-    # Raw palette has one byte per channel (R, G, B).
-    # Each channel is 6-bit (0..63), as per VGA palette limitation.
-    rawpalette = rawdata[: 256 * 3]
-    # Compressed stream of pixels.
-    rawpixels = rawdata[256 * 3 :]
-
-    # One byte per channel (R, G, B), 8-bit per channel.
-    # palette = bytearray(round(c * 255 / 63) for c in rawpalette)
-
-    # Our framebuffer where the compressed image will be uncompresed.
-    # pixels = bytearray(320 * 200)
-    with JetpackRLEDecoder(rawpixels) as decoder:
-        pixels = decoder.read(320 * 200)
-        assert len(pixels) == 320 * 200
-
-    obj = JetpackGfx()
-    obj.pixels = pixels
-    obj.palette_vga = rawpalette
-    return obj
 
 
 # TODO: sanity check for tile consistency:
