@@ -11,9 +11,10 @@ like.
 
 [Jetpack][] is game released in 1993 for MS-DOS. It was written by a single
 person, Adam Pedersen, with graphics by Wayne Timmerman. Originally distributed
-as shareware and published by Software Creations, the current version is 1.5
-and [since December 1998][freewarerelease] is available as freeware by Adept
-Software, the company founded by Adam Pedersen.
+as shareware and published by Software Creations, and later re-published by
+Impulse Games, the current version is 1.5 and [since December
+1998][freewarerelease] is available as freeware by Adept Software, the company
+founded by Adam Pedersen.
 
 The game has 100 built-in levels. The [Christmas Special][xmas] edition has 10
 brand-new levels, and xmas-themed graphics.

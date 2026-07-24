@@ -15,9 +15,9 @@ def run_tests():
     total_failure = 0
     total_tests = 0
 
-    from jetpyck import gfxdat, level, rle, utils
+    from jetpyck import gfxdat, level, rle, tileset, utils
 
-    for module in [gfxdat, level, rle, utils]:
+    for module in [gfxdat, level, rle, tileset, utils]:
         failure_count, test_count = doctest.testmod(
             module, optionflags=doctest.IGNORE_EXCEPTION_DETAIL
         )
