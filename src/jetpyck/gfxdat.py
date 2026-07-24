@@ -122,7 +122,7 @@ JetPack implemented the following animations as just color cycles:
 * blinking squares for the energy charger tiles
 * walking lines for the energy drain tiles
 * conveyor belt movement
-* stairs moving up or down
+* ladders moving up or down
 * red pulsing effect at the high scores screen
 
 The game runs in VGA mode `13h`, which runs at 70Hz. The game updates the
@@ -135,7 +135,7 @@ There are three color ranges that get animated:
     * white → middle gray → dark gray → middle gray
     * colors shifted forward (i.e. 248 receives the RGB color from 247, and
       247 receives from 250)
-    * used for the stairs, and for the jetpack
+    * used for the ladders, and for the jetpack
 * 4 colors (from 251 until 254)
     * dark gray → gradient → light gray
     * colors shifted forward (i.e. 252 receives the RGB color from 251, and
@@ -336,7 +336,7 @@ class JetpackColorCycle:
 
     These color cycling ranges are hard-coded into the game:
 
-    >>> JetpackColorCycle.stairs()
+    >>> JetpackColorCycle.ladders()
     JetpackColorCycle(first=247, last=250, direction=JetpackColorCycleDirection.Backward)
     >>> JetpackColorCycle.belts()
     JetpackColorCycle(first=251, last=254, direction=JetpackColorCycleDirection.Backward)
@@ -345,9 +345,9 @@ class JetpackColorCycle:
 
     These objects are sortable.
 
-    >>> JetpackColorCycle.stairs() < JetpackColorCycle.belts()
+    >>> JetpackColorCycle.ladders() < JetpackColorCycle.belts()
     True
-    >>> JetpackColorCycle.stairs() > JetpackColorCycle.belts()
+    >>> JetpackColorCycle.ladders() > JetpackColorCycle.belts()
     False
 
     It's possible to create custom color cycling ranges, but these cannot be
@@ -538,8 +538,8 @@ class JetpackColorCycle:
         )
 
     @classmethod
-    def stairs(cls) -> Self:
-        """Hard-coded color cycling range used for the stairs."""
+    def ladders(cls) -> Self:
+        """Hard-coded color cycling range used for the ladders."""
         return cls(247, 250, JetpackColorCycleDirection.Backward)
 
     @classmethod
@@ -587,7 +587,7 @@ class JetpackGfx:
     >>> gfx.width, gfx.height
     (320, 200)
 
-    >>> gfx.color_cycles == [JetpackColorCycle.stairs(), JetpackColorCycle.belts()]
+    >>> gfx.color_cycles == [JetpackColorCycle.ladders(), JetpackColorCycle.belts()]
     True
     """
 
@@ -895,7 +895,7 @@ class JetpackGfx:
         self.height = height
         self.pixels: bytes | bytearray = bytearray(self.width * self.height)
         self.color_cycles = [
-            JetpackColorCycle.stairs(),
+            JetpackColorCycle.ladders(),
             JetpackColorCycle.belts(),
         ]
         self.palette_vga: bytes | bytearray = bytearray(self.default_palette_vga)
