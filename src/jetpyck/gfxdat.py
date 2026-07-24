@@ -280,7 +280,6 @@ def color_8bit_to_6bit(channel: int) -> int:
     Converting from 256 colors to 64 colors results in groups of 4 duplicate colors.
 
     >>> rgb6 = [color_8bit_to_6bit(x) for x in range(256)]
-    >>> from itertools import chain
     >>> expected = list(chain.from_iterable([c] * 4 for c in range(64)))
     >>> assert rgb6 == expected, rgb6
 
@@ -1051,13 +1050,21 @@ class JetpackGfx:
         return images
 
     @classmethod
-    def load_from_dat_filename(cls, filename: str | Path) -> Self:
-        """Creates a new JetpackGfx instance, loading from a file."""
-        return cls.load_from_dat(Path(filename).read_bytes())
+    def load_from_filename(cls, filename: str | Path) -> Self:
+        """Creates a new JetpackGfx instance, loading from a file.
+
+        These files are usually named as `JETPACK?.DAT` and `_JETP_?0.DAT`.
+        """
+        return cls.load_from_bytes(Path(filename).read_bytes())
 
     @classmethod
-    def load_from_dat(cls, data: Sequence[int]) -> Self:
-        """Creates a new JetpackGfx instance, loading from a `bytes` object."""
+    def load_from_bytes(cls, data: Sequence[int]) -> Self:
+        """Creates a new JetpackGfx instance, loading from a `bytes` object.
+
+        ---
+
+        TODO: Add tests loading a real-world file.
+        """
         # Raw palette has one byte per channel (R, G, B).
         # Each channel is 6-bit (0..63), as per VGA palette limitation.
         palette = data[: 256 * 3]

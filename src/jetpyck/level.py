@@ -52,6 +52,7 @@ import struct
 from collections.abc import Iterable
 from dataclasses import dataclass, field, KW_ONLY, InitVar
 from enum import IntEnum
+from io import BytesIO
 from pathlib import Path
 from warnings import warn
 
@@ -109,7 +110,6 @@ class JetpackEnemy:
     >>> bindata = e.pack()
     >>> bindata
     b'\x06\x02\x03'
-    >>> from io import BytesIO
     >>> with BytesIO(bindata) as stream:
     ...     other = JetpackEnemy.unpack(stream)
     >>> e is other
@@ -165,7 +165,6 @@ class JetpackLevelTilemap:
 
     Reading that binary tilemap as a proper Tilemap object.
 
-    >>> from io import BytesIO
     >>> with BytesIO(allbytes) as stream:
     ...     othermap = JetpackLevelTilemap.unpack(stream)
     >>> othermap.width, othermap.height
@@ -547,7 +546,6 @@ class JetpackLevel:
     >>> bindata = lvl.pack()
     >>> len(bindata)
     506
-    >>> from io import BytesIO
     >>> with BytesIO(bindata) as stream:
     ...     # Simulating a file object opened from a real file.
     ...     stream.name = 'EXAMPLE.JET'
@@ -676,6 +674,26 @@ class JetpackLevel:
                 struct.pack("26s", self.description),
             ]
         )
+
+    @classmethod
+    def load_from_filename(cls, filename: str | Path) -> Self:
+        """Creates a new JetpackLevel instance, loading from a file.
+
+        These files are found at `LEVELS/*.JET`.
+        """
+        with Path(filename).open('rb') as f:
+            return cls.unpack(f)
+
+    @classmethod
+    def load_from_bytes(cls, data: Sequence[int], filename: Optional[str | Path] = None) -> Self:
+        """Creates a new JetpackLevel instance, loading from a `bytes` object.
+
+        ---
+
+        TODO: Add tests loading a real-world file.
+        """
+        with BytesIO(data) as stream:
+            return cls.unpack(stream, filename=filename)
 
     def as_printable_text(self) -> str:
         """Returns a textual representation of the level.
@@ -985,7 +1003,6 @@ class JetpackLevelPack:
     >>> bindata[0:2]
     b'\x86\xe6'
 
-    >>> from io import BytesIO
     >>> with BytesIO(bindata) as stream:
     ...     pack2 = JetpackLevelPack.unpack(stream)
     >>> pack1 == pack2
@@ -1075,3 +1092,23 @@ class JetpackLevelPack:
                 *(level.pack() for level in self.levels),
             ]
         )
+
+    @classmethod
+    def load_from_filename(cls, filename: str | Path) -> Self:
+        """Creates a new JetpackLevelPack instance, loading from a file.
+
+        The game has a `JETLEV.DAT` file with the level pack.
+        """
+        with Path(filename).open('rb') as f:
+            return cls.unpack(f)
+
+    @classmethod
+    def load_from_bytes(cls, data: Sequence[int]) -> Self:
+        """Creates a new JetpackLevelPack instance, loading from a `bytes` object.
+
+        ---
+
+        TODO: Add tests loading a real-world file.
+        """
+        with BytesIO(data) as stream:
+            return cls.unpack(stream)
