@@ -171,7 +171,7 @@ from warnings import warn
 from PIL import Image
 from PIL._typing import StrOrBytesPath
 
-from .rle import JetpackRLEDecoder
+from .rle import JetpackRLEDecoder, JetpackRLEEncoder
 
 PILFileParameter = StrOrBytesPath | IO[bytes]
 
@@ -1061,6 +1061,24 @@ class JetpackGfx:
         return images
 
     @classmethod
+    def unpack(cls, stream: BinaryIO) -> Self:
+        # The BitStream and JetpackRLEDecoder classes look at the end of the
+        # stream to trigger warnings in case trailing data is ignored. This
+        # only works (in the current implementation) if the entire file is read
+        # in memory first.
+        #
+        # Rewriting that logic to work with stream might be neat, but also
+        # sounds like a lot of refactoring work for no real benefit.
+        return self.load_from_bytes(stream.read())
+
+    def pack(self) -> bytes:
+        palette = bytes(self.palette_vga)
+        assert len(palette) == 3 * 256
+        with JetpackRLEEncoder() as enc:
+            enc.encode_bytes(self.pixels)
+        return bytes(self.palette_vga) + bytes(enc)
+
+    @classmethod
     def load_from_filename(cls, filename: str | Path) -> Self:
         """Creates a new JetpackGfx instance, loading from a file.
 
@@ -1077,9 +1095,10 @@ class JetpackGfx:
         TODO: Add tests loading a real-world file.
         """
         # Raw palette has one byte per channel (R, G, B).
+        # 3 channels × 256 colors = 768 bytes
         # Each channel is 6-bit (0..63), as per VGA palette limitation.
         palette = data[: 256 * 3]
-        # RLE-encoded pixel data.
+        # All the remaining bytes are RLE-encoded pixels.
         rle_pixels = data[256 * 3 :]
         # Decoding the compressed stream of pixels.
         with JetpackRLEDecoder(rle_pixels) as decoder:
@@ -1087,6 +1106,12 @@ class JetpackGfx:
             assert len(pixels) == 320 * 200
 
         return cls(pixels=pixels, palette_vga=palette)
+
+    def save_as_dat(self, filename: str | Path) -> None:
+        """Convenience function to write directly to a file.
+        """
+        with open(filename, "wb") as f:
+            f.write(self.pack())
 
     @classmethod
     def load_from_image_file(cls, fp: PILFileParameter) -> Self:
