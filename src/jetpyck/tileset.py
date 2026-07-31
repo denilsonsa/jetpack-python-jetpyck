@@ -1,3 +1,6 @@
+from PIL import Image
+from PIL._typing import StrOrBytesPath
+
 __all__ = []
 
 
