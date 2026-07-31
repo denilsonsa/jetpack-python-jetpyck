@@ -9,7 +9,11 @@
         * Save as animated GIF, or animated WebP, or perhaps APNG (which is likely obsolete)
     * The `render` module can have a function to generate 3 additional `Image` instances by rotating the colors in the palette.
     * Bonus features:
-        * Export as ILBM PBM IFF file (for use in PyDPainter, Deluxe Paint, DPaint-js). I should check the PyDPainter license for [this code](https://github.com/mriale/PyDPainter/blob/master/libs/picio.py)
+        * Export/import as ILBM PBM IFF file (for use in PyDPainter, Deluxe Paint, DPaint-js).
+            * [PyDPainter has code for it](https://github.com/mriale/PyDPainter/blob/master/libs/picio.py), but the GPL license is too restrictive and incompatible with MIT.
+            * [IFFshow is written in Python](https://github.com/mdoege/IFFshow) and has a compatible Public Domain license.
+            * [libilbm code is written in C](https://github.com/svanderburg/libilbm) and also has MIT license.
+         * I may choose to use a library to import from LBM, but write my own terrible writer code, one that only supports one kind of output. That would be good enough to export a file that can be readable by those drawing tools.
     * We could have an additional `shortcuts` module for common use-cases:
         * Convert a `.DAT` file to `.GIF`, or vice-versa
         * Render a level to an image, using a certain tileset.
